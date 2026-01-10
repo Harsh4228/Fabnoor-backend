@@ -31,6 +31,10 @@ const colorVariantSchema = new mongoose.Schema(
       type: String,
       required: true, // Black, Blue, Red
     },
+    type: {
+      type: String,
+      required: true, // Matte, Glossy
+    },
     images: {
       type: [String],
       required: true, // images for this color
@@ -66,6 +70,7 @@ const productSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+
 
   variants: {
     type: [colorVariantSchema],

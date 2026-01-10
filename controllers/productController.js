@@ -1,6 +1,10 @@
 import { v2 as cloudinary } from "cloudinary";
 import productModel from "../models/productModel.js";
 
+/* ================= UTILS ================= */
+const safeKey = (val) =>
+  val.trim().toLowerCase().replace(/\s+/g, "_");
+
 /**
  * =========================
  * ADD PRODUCT (ADMIN)
@@ -24,7 +28,7 @@ const addProduct = async (req, res) => {
       });
     }
 
-    // ✅ SAFE JSON PARSE
+    /* PARSE VARIANTS */
     let parsedVariants;
     try {
       parsedVariants = JSON.parse(variants);
@@ -35,85 +39,65 @@ const addProduct = async (req, res) => {
       });
     }
 
-    if (!Array.isArray(parsedVariants) || parsedVariants.length === 0) {
+    if (!Array.isArray(parsedVariants) || !parsedVariants.length) {
       return res.status(400).json({
         success: false,
         message: "Variants are required",
       });
     }
 
-    /**
-     * =========================
-     * GROUP FILES BY FIELDNAME
-     * =========================
-     */
+    /* GROUP FILES */
     const imageMap = {};
     (req.files || []).forEach((file) => {
-      if (!imageMap[file.fieldname]) {
-        imageMap[file.fieldname] = [];
-      }
+      if (!imageMap[file.fieldname]) imageMap[file.fieldname] = [];
       imageMap[file.fieldname].push(file);
     });
 
-    /**
-     * =========================
-     * BUILD VARIANTS
-     * =========================
-     */
+    /* BUILD VARIANTS */
     const finalVariants = await Promise.all(
       parsedVariants.map(async (variant) => {
-        const { color, colorKey, sizes } = variant;
+        const { color, type, sizes } = variant;
 
-        if (!color || !colorKey || !Array.isArray(sizes) || sizes.length === 0) {
-          throw new Error(`Invalid variant data for color: ${color}`);
+        if (!color || !type || !Array.isArray(sizes) || !sizes.length) {
+          throw new Error(`Invalid variant data for ${color}`);
         }
 
-        const files = imageMap[`${colorKey}_images`] || [];
+        const imageKey = `${safeKey(color)}_${safeKey(type)}_images`;
+        const files = imageMap[imageKey] || [];
+
         if (!files.length) {
-          throw new Error(`Images required for color: ${color}`);
+          throw new Error(`Images required for ${color} (${type})`);
         }
 
-        const imageUrls = await Promise.all(
+        const images = await Promise.all(
           files.map(async (file) => {
-            const result = await cloudinary.uploader.upload(file.path, {
+            const res = await cloudinary.uploader.upload(file.path, {
               folder: "products",
             });
-            return result.secure_url;
+            return res.secure_url;
           })
         );
 
-        const finalSizes = sizes.map((s) => ({
-          size: s.size,
-          price: Number(s.price),
-          stock: Number(s.stock),
-        }));
-
         return {
           color,
-          images: imageUrls,
-          sizes: finalSizes,
+          type,
+          images,
+          sizes: sizes.map((s) => ({
+            size: s.size,
+            price: Number(s.price),
+            stock: Number(s.stock),
+          })),
         };
       })
     );
 
-    /**
-     * =========================
-     * ⭐ MAIN IMAGE FIX ⭐
-     * =========================
-     * Frontend depends on this
-     */
-    const mainImages =
-      finalVariants[0]?.images?.length > 0
-        ? finalVariants[0].images
-        : [];
-
+    /* CREATE PRODUCT */
     const product = await productModel.create({
       name,
       description,
       category,
       subCategory,
       variants: finalVariants,
-      image: mainImages, // ✅ FIXED
       bestseller: bestseller === "true" || bestseller === true,
       date: Date.now(),
     });
@@ -133,7 +117,7 @@ const addProduct = async (req, res) => {
 
 /**
  * =========================
- * LIST ALL PRODUCTS (PUBLIC)
+ * LIST PRODUCTS (PUBLIC)
  * =========================
  */
 const listProducts = async (req, res) => {
@@ -141,79 +125,43 @@ const listProducts = async (req, res) => {
     const products = await productModel.find({}).sort({ date: -1 });
     res.json({ success: true, products });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 /**
  * =========================
- * GET SINGLE PRODUCT (PUBLIC)
+ * SINGLE PRODUCT
  * =========================
  */
 const singleProduct = async (req, res) => {
   try {
-    const { id } = req.params;
-    const product = await productModel.findById(id);
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
-    }
-
+    const product = await productModel.findById(req.params.id);
+    if (!product)
+      return res.status(404).json({ success: false, message: "Not found" });
     res.json({ success: true, product });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 /**
  * =========================
- * REMOVE PRODUCT (ADMIN)
+ * REMOVE PRODUCT
  * =========================
  */
 const removeProduct = async (req, res) => {
   try {
-    const { id } = req.body;
-
-    if (!id) {
-      return res.status(400).json({
-        success: false,
-        message: "Product ID is required",
-      });
-    }
-
-    const product = await productModel.findByIdAndDelete(id);
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
-    }
-
-    return res.json({
-      success: true,
-      message: "Product removed successfully",
-    });
+    await productModel.findByIdAndDelete(req.body.id);
+    res.json({ success: true, message: "Product removed" });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 /**
  * =========================
- * EDIT PRODUCT (ADMIN)
+ * EDIT PRODUCT
  * =========================
  */
 const editProduct = async (req, res) => {
@@ -228,59 +176,40 @@ const editProduct = async (req, res) => {
       variants,
     } = req.body;
 
-    if (!id || !variants) {
-      return res.status(400).json({
-        success: false,
-        message: "Product ID and variants are required",
-      });
-    }
-
     const product = await productModel.findById(id);
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
-    }
+    if (!product)
+      return res.status(404).json({ success: false, message: "Not found" });
 
-    let parsedVariants;
-    try {
-      parsedVariants = JSON.parse(variants);
-    } catch {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid variants format",
-      });
-    }
+    const parsedVariants = JSON.parse(variants);
 
     const imageMap = {};
     (req.files || []).forEach((file) => {
-      if (!imageMap[file.fieldname]) {
-        imageMap[file.fieldname] = [];
-      }
+      if (!imageMap[file.fieldname]) imageMap[file.fieldname] = [];
       imageMap[file.fieldname].push(file);
     });
 
     const updatedVariants = await Promise.all(
       parsedVariants.map(async (variant) => {
-        const { color, colorKey, sizes, existingImages = [] } = variant;
+        const { color, type, sizes, existingImages = [] } = variant;
+
+        const imageKey = `${safeKey(color)}_${safeKey(type)}_images`;
+        const newFiles = imageMap[imageKey] || [];
 
         let images = existingImages;
-
-        const newFiles = imageMap[`${colorKey}_images`] || [];
-        if (newFiles.length > 0) {
+        if (newFiles.length) {
           images = await Promise.all(
             newFiles.map(async (file) => {
-              const result = await cloudinary.uploader.upload(file.path, {
+              const res = await cloudinary.uploader.upload(file.path, {
                 folder: "products",
               });
-              return result.secure_url;
+              return res.secure_url;
             })
           );
         }
 
         return {
           color,
+          type,
           images,
           sizes: sizes.map((s) => ({
             size: s.size,
@@ -299,28 +228,14 @@ const editProduct = async (req, res) => {
       bestseller === "true" || bestseller === true
         ? true
         : product.bestseller;
-
     product.variants = updatedVariants;
-
-    // ✅ KEEP image IN SYNC
-    product.image =
-      updatedVariants[0]?.images?.length > 0
-        ? updatedVariants[0].images
-        : product.image || [];
 
     await product.save();
 
-    return res.json({
-      success: true,
-      message: "Product updated successfully",
-      product,
-    });
+    res.json({ success: true, product });
   } catch (error) {
     console.error("Edit product error:", error.message);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
