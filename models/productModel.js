@@ -3,24 +3,7 @@ import mongoose from "mongoose";
 /**
  * Size-wise price & stock
  */
-const sizeSchema = new mongoose.Schema(
-  {
-    size: {
-      type: String, // S, M, L, XL
-      required: true,
-    },
-    price: {
-      type: Number, // price for this size
-      required: true,
-    },
-    stock: {
-      type: Number,
-      required: true,
-      default: 0,
-    },
-  },
-  { _id: false }
-);
+
 
 /**
  * Color Variant Schema
@@ -40,8 +23,17 @@ const colorVariantSchema = new mongoose.Schema(
       required: true, // images for this color
     },
     sizes: {
-      type: [sizeSchema],
+      type: [String],
       required: true,
+    },
+    price: {
+      type: Number, // price for this size
+      required: true,
+    },
+    stock: {
+      type: Number,
+      required: true,
+      default: 0,
     },
   },
   { _id: false }

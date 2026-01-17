@@ -56,7 +56,7 @@ const addProduct = async (req, res) => {
     /* BUILD VARIANTS */
     const finalVariants = await Promise.all(
       parsedVariants.map(async (variant) => {
-        const { color, type, sizes } = variant;
+        const { color, type, sizes ,price,stock} = variant;
 
         if (!color || !type || !Array.isArray(sizes) || !sizes.length) {
           throw new Error(`Invalid variant data for ${color}`);
@@ -82,11 +82,9 @@ const addProduct = async (req, res) => {
           color,
           type,
           images,
-          sizes: sizes.map((s) => ({
-            size: s.size,
-            price: Number(s.price),
-            stock: Number(s.stock),
-          })),
+          sizes,
+          price,
+          stock,
         };
       })
     );
@@ -190,7 +188,7 @@ const editProduct = async (req, res) => {
 
     const updatedVariants = await Promise.all(
       parsedVariants.map(async (variant) => {
-        const { color, type, sizes, existingImages = [] } = variant;
+        const { color, type, sizes, existingImages, price,stock = [] } = variant;
 
         const imageKey = `${safeKey(color)}_${safeKey(type)}_images`;
         const newFiles = imageMap[imageKey] || [];
@@ -211,11 +209,9 @@ const editProduct = async (req, res) => {
           color,
           type,
           images,
-          sizes: sizes.map((s) => ({
-            size: s.size,
-            price: Number(s.price),
-            stock: Number(s.stock),
-          })),
+          sizes,
+          price,
+          stock,
         };
       })
     );

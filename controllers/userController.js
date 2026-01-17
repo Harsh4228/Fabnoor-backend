@@ -51,7 +51,7 @@ const loginUser = async (req, res) => {
 /* ================= USER REGISTER ================= */
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password,mobile} = req.body;
 
     const exists = await userModel.findOne({ email });
     if (exists) {
@@ -75,6 +75,7 @@ const registerUser = async (req, res) => {
     const user = await userModel.create({
       name,
       email,
+      mobile,
       password: hashedPassword,
       role: "user", // ✅ default role
     });
@@ -88,6 +89,7 @@ const registerUser = async (req, res) => {
         id: user._id,
         name: user.name,
         role: user.role,
+        mobile: user.mobile,
       },
     });
   } catch (error) {
@@ -125,6 +127,7 @@ const adminLogin = async (req, res) => {
         id: user._id,
         name: user.name,
         role: user.role,
+        mpbile: user.mobile,
       },
     });
   } catch (error) {
@@ -148,11 +151,15 @@ const getProfile = async (req, res) => {
 /* ================= UPDATE PROFILE ================= */
 const updateProfile = async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, mobile } = req.body;
+    if (mobile.length!=10)
+    {
+      return res.json({ success: false, message: "Invalid credentials" });
+    }
 
     const user = await userModel.findByIdAndUpdate(
       req.user._id,
-      { name },
+      { name , mobile},
       { new: true }
     ).select("-password");
 

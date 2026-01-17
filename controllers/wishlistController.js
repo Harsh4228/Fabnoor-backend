@@ -9,15 +9,14 @@ import userModel from "../models/userModel.js";
 export const addToWishlist = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { productId, color, size } = req.body;
+    const { productId, color } = req.body;
 
     const user = await userModel.findById(userId);
 
     const alreadyExists = user.wishlist.some(
       (item) =>
         item.productId.toString() === productId &&
-        item.color === color &&
-        item.size === size
+        item.color === color 
     );
 
     if (alreadyExists) {
@@ -27,7 +26,7 @@ export const addToWishlist = async (req, res) => {
       });
     }
 
-    user.wishlist.push({ productId, color, size });
+    user.wishlist.push({ productId, color });
     await user.save();
 
     res.status(200).json({
@@ -48,7 +47,7 @@ export const addToWishlist = async (req, res) => {
 export const removeFromWishlist = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { productId, color, size } = req.body;
+    const { productId, color } = req.body;
 
     const user = await userModel.findById(userId);
 
@@ -56,8 +55,7 @@ export const removeFromWishlist = async (req, res) => {
       (item) =>
         !(
           item.productId.toString() === productId &&
-          item.color === color &&
-          item.size === size
+          item.color === color 
         )
     );
 
