@@ -1,6 +1,16 @@
 import express from "express";
 import "dotenv/config";
 import connectDB from "./config/mongodb.js";
+
+// Global safety logs to surface any uncaught errors during limited checks
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err && err.stack ? err.stack : err);
+  // Do not exit immediately during debug; allow inspection
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('UNHANDLED REJECTION:', reason && reason.stack ? reason.stack : reason);
+});
 import connectCloudinary from "./config/cloudinary.js";
 import userRouter from "./routes/userRoute.js";
 import productRouter from "./routes/productRoute.js";
@@ -20,9 +30,13 @@ app.use(cors({
   origin: true,
   credentials: true
 }));
-// DB
-connectDB();
-connectCloudinary();
+// DB & services
+if (process.env.SKIP_DB === "true") {
+  console.log("SKIP_DB=true - skipping DB and Cloudinary initialization (limited checks)");
+} else {
+  connectDB();
+  connectCloudinary();
+}
 
 // Middleware
 app.use(express.json());
@@ -51,6 +65,17 @@ app.get("/", (req, res) => {
   res.send("API working");
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log("Server started on", port);
+  // print address info for debug
+  try {
+    console.log('address:', server.address());
+  } catch (err) {
+    console.log('address info not available:', err && err.message);
+  }
+
+  // heartbeat to keep process in foreground and confirm it's alive
+  setInterval(() => {
+    console.log('heartbeat - server alive at', new Date().toISOString());
+  }, 10000);
 });

@@ -11,10 +11,15 @@ import { generateInvoice } from "../config/invoiceGenerator.js";
 ========================= */
 const currency = "INR";
 
-const razorpayInstance = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+let razorpayInstance = null;
+if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
+  razorpayInstance = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
+} else {
+  console.log("Razorpay not configured: skipping initialization");
+}
 
 /* =========================
    PLACE ORDER (COD)
@@ -23,7 +28,25 @@ const placeOrder = async (req, res) => {
   try {
     const { items, amount, address } = req.body;
 
+    // If we are running in limited debug mode, fail fast with a clear status so callers
+    // don't misinterpret the problem as an auth issue (401). This avoids confusion when
+    // SKIP_DB=true is used to run the server without DB services.
+    if (process.env.SKIP_DB === "true") {
+      console.warn('[order] Attempt to place COD order while SKIP_DB=true - DB disabled for limited checks');
+      return res.status(503).json({
+        success: false,
+        message: "Server running in limited debug mode (SKIP_DB=true); order placement is disabled. Enable DB to perform order operations.",
+      });
+    }
+
+    // Log whether an Authorization header was present (mask not logged here to avoid leaking tokens)
+    console.log('[order] placeOrder called - Authorization header present:', !!req.headers?.authorization);
+
     if (!req.user || !req.user._id) {
+      console.warn('[order] User not authenticated - request headers:', {
+        authHeaderPresent: !!req.headers?.authorization,
+        ip: req.ip || req.connection?.remoteAddress,
+      });
       return res.status(401).json({
         success: false,
         message: "User not authenticated",
@@ -71,6 +94,14 @@ const placeOrderRazorpay = async (req, res) => {
   try {
     const { items, amount, address } = req.body;
 
+    if (process.env.SKIP_DB === "true") {
+      console.warn('[order] Attempt to create Razorpay order while SKIP_DB=true - DB disabled for limited checks');
+      return res.status(503).json({
+        success: false,
+        message: "Server running in limited debug mode (SKIP_DB=true); razorpay order creation is disabled. Enable DB to perform order operations.",
+      });
+    }
+
     if (!req.user || !req.user._id) {
       return res.status(401).json({
         success: false,
@@ -87,6 +118,10 @@ const placeOrderRazorpay = async (req, res) => {
       payment: false,
       status: "Order Placed",
     });
+
+    if (!razorpayInstance) {
+      return res.status(501).json({ success: false, message: "Razorpay not configured" });
+    }
 
     const razorpayOrder = await razorpayInstance.orders.create({
       amount: amount * 100,
@@ -118,6 +153,14 @@ const verifyRazorpay = async (req, res) => {
       razorpay_signature,
     } = req.body;
 
+    if (process.env.SKIP_DB === "true") {
+      console.warn('[order] Attempt to verify Razorpay payment while SKIP_DB=true - DB disabled for limited checks');
+      return res.status(503).json({
+        success: false,
+        message: "Server running in limited debug mode (SKIP_DB=true); payment verification is disabled. Enable DB to perform order operations.",
+      });
+    }
+
     const body = razorpay_order_id + "|" + razorpay_payment_id;
 
     const expectedSignature = crypto
@@ -130,6 +173,10 @@ const verifyRazorpay = async (req, res) => {
         success: false,
         message: "Payment verification failed",
       });
+    }
+
+    if (!razorpayInstance) {
+      return res.status(501).json({ success: false, message: "Razorpay not configured" });
     }
 
     const razorpayOrder = await razorpayInstance.orders.fetch(
