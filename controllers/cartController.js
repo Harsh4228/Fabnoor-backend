@@ -137,3 +137,51 @@ export const getUserCart = async (req, res) => {
     });
   }
 };
+
+/**
+ * =========================
+ * MERGE CART (BULK) - merge guest/local cart into user cart
+ * Accepts { cartData: { [itemId]: { quantity, color, type } } }
+ * =========================
+ */
+export const mergeCart = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { cartData } = req.body;
+
+    if (!cartData || typeof cartData !== "object") {
+      return res.status(400).json({ success: false, message: "cartData required" });
+    }
+
+    const user = await userModel.findById(userId);
+    if (!user) {
+      return res.status(401).json({ success: false, message: "User not found" });
+    }
+
+    const serverCart = user.cartData || {};
+
+    for (const itemId in cartData) {
+      const val = cartData[itemId] || {};
+      const qty = Number(val.quantity || 0);
+      const color = val.color || "";
+      const type = val.type || "";
+
+      if (qty <= 0) continue;
+
+      if (!serverCart[itemId]) {
+        serverCart[itemId] = { quantity: qty, color, type };
+      } else {
+        serverCart[itemId].quantity = Number(serverCart[itemId].quantity || 0) + qty;
+        if (color) serverCart[itemId].color = color;
+        if (type) serverCart[itemId].type = type;
+      }
+    }
+
+    user.cartData = serverCart;
+    await user.save();
+
+    res.json({ success: true, cartData: user.cartData });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
