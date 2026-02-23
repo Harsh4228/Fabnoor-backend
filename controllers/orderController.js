@@ -278,7 +278,7 @@ const updateStatus = async (req, res) => {
     if (status === "Delivered") {
       const user = await userModel.findById(order.userId);
       if (user?.email) {
-        const invoiceBuffer = await generateInvoice(order);
+        const invoiceBuffer = await generateInvoice(order, user);
         await sendInvoiceEmail(user.email, invoiceBuffer);
       }
     }
@@ -323,4 +323,27 @@ export {
   userOrders,
   updateStatus,
   updatePaymentStatus,
+  getInvoice,
+};
+
+/* =========================
+   ADMIN: DOWNLOAD INVOICE (PDF)
+========================= */
+const getInvoice = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const order = await orderModel.findById(orderId);
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+
+    const user = await userModel.findById(order.userId);
+    const pdfBuffer = await generateInvoice(order, user);
+
+    const filename = `invoice-${order.orderNumber || order._id}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.send(pdfBuffer);
+  } catch (error) {
+    console.error("Get invoice error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };

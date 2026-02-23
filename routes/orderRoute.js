@@ -6,6 +6,7 @@ import {
   userOrders,
   updateStatus,
   updatePaymentStatus,
+  getInvoice,
   verifyRazorpay,
 } from "../controllers/orderController.js";
 
@@ -20,6 +21,7 @@ const orderRouter = express.Router();
 orderRouter.post("/list", authUser, adminAuth, allOrders);
 orderRouter.post("/status", authUser, adminAuth, updateStatus);
 orderRouter.post("/paymentstatus", authUser, adminAuth, updatePaymentStatus);
+orderRouter.get("/invoice/:orderId", authUser, adminAuth, getInvoice);
 
 /* ================= USER FEATURES ================= */
 

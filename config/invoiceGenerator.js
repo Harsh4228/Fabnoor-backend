@@ -2,7 +2,8 @@
 
 import PDFDocument from "pdfkit";
 
-const generateInvoice = async (order) => {
+// generateInvoice(order, user?) -> returns a PDF buffer containing a simple invoice
+const generateInvoice = async (order, user) => {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument();
     const buffers = [];
@@ -17,17 +18,18 @@ const generateInvoice = async (order) => {
       reject(err);
     });
 
-    // 📄 Start writing invoice
+    // Header
     doc.fontSize(20).text("Invoice", { align: "center" });
     doc.moveDown();
 
-    doc.fontSize(12).text(`Order ID: ${order._id}`);
-    doc.text(`Customer Email: ${order.user.email}`);
-    doc.text(`Order Date: ${new Date(order.createdAt).toLocaleString()}`);
+    const orderLabel = order.orderNumber || order._id;
+    doc.fontSize(12).text(`Order ID: ${orderLabel}`);
+    doc.text(`Customer Email: ${user?.email || (order.user?.email ?? "N/A")}`);
+    doc.text(`Order Date: ${new Date(order.createdAt || order.createdAt).toLocaleString()}`);
     doc.moveDown();
 
     doc.text("Products:");
-    order.items.forEach((item, index) => {
+    (order.items || []).forEach((item, index) => {
       const codeInfo = item.code ? ` (Code: ${item.code})` : "";
       doc.text(`${index + 1}. ${item.name}${codeInfo} x ${item.quantity} = ₹${item.price}`);
     });
@@ -35,7 +37,7 @@ const generateInvoice = async (order) => {
     doc.moveDown();
     doc.font("Helvetica-Bold").text(`Total: ₹${order.amount}`, { align: "right" });
 
-    doc.end(); // 🚨 IMPORTANT: This finalizes the PDF
+    doc.end();
   });
 };
 

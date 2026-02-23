@@ -98,6 +98,13 @@ const orderSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Human-friendly order number (auto-generated if missing)
+    orderNumber: {
+      type: String,
+      unique: true,
+      index: true,
+    },
+
     status: {
       type: String,
       enum: [
@@ -132,6 +139,16 @@ const orderSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Auto-generate a human-friendly orderNumber if not present
+orderSchema.pre("save", function (next) {
+  if (!this.orderNumber) {
+    const short = Math.random().toString(36).slice(2, 8).toUpperCase();
+    const time = Date.now().toString().slice(-6);
+    this.orderNumber = `ORD-${time}-${short}`;
+  }
+  next();
+});
 
 /**
  * =========================
