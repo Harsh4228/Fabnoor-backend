@@ -53,6 +53,17 @@ const placeOrder = async (req, res) => {
       });
     }
 
+    // Prevent accidental duplicate orders in quick succession
+    const recent = await orderModel.findOne({
+      userId: req.user._id,
+      amount,
+      createdAt: { $gte: new Date(Date.now() - 30 * 1000) },
+    });
+
+    if (recent) {
+      return res.status(409).json({ success: false, message: "Duplicate order detected. If this was not intended, please check your orders." });
+    }
+
     const order = await orderModel.create({
       userId: req.user._id, // ✅ FIX
       items,
@@ -112,6 +123,17 @@ const placeOrderRazorpay = async (req, res) => {
         success: false,
         message: "User not authenticated",
       });
+    }
+
+    // Prevent accidental duplicate orders in quick succession
+    const recent = await orderModel.findOne({
+      userId: req.user._id,
+      amount,
+      createdAt: { $gte: new Date(Date.now() - 30 * 1000) },
+    });
+
+    if (recent) {
+      return res.status(409).json({ success: false, message: "Duplicate order detected. If this was not intended, please check your orders." });
     }
 
     const order = await orderModel.create({
