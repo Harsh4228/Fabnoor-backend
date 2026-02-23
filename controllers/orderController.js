@@ -70,7 +70,12 @@ const placeOrder = async (req, res) => {
 
     // ✅ Send email
     if (req.user.email) {
-      await sendOrderEmail(req.user.email, items, amount);
+      // schedule order confirmation email in background to avoid blocking response
+      setImmediate(() => {
+        sendOrderEmail(req.user.email, items, amount).catch((err) => {
+          console.error("Background sendOrderEmail error:", err);
+        });
+      });
     }
 
     res.json({
@@ -201,7 +206,12 @@ const verifyRazorpay = async (req, res) => {
     // ✅ Send email
     const user = await userModel.findById(order.userId);
     if (user?.email) {
-      await sendOrderEmail(user.email, order.items, order.amount);
+      // send order email in background
+      setImmediate(() => {
+        sendOrderEmail(user.email, order.items, order.amount).catch((err) => {
+          console.error("Background sendOrderEmail error:", err);
+        });
+      });
     }
 
     res.json({
@@ -274,12 +284,18 @@ const updateStatus = async (req, res) => {
     order.status = status;
     await order.save();
 
-    // on delivery, generate and send invoice
+    // on delivery, generate and send invoice (background)
     if (status === "Delivered") {
       const user = await userModel.findById(order.userId);
       if (user?.email) {
-        const invoiceBuffer = await generateInvoice(order, user);
-        await sendInvoiceEmail(user.email, invoiceBuffer);
+        setImmediate(async () => {
+          try {
+            const invoiceBuffer = await generateInvoice(order, user);
+            await sendInvoiceEmail(user.email, invoiceBuffer);
+          } catch (err) {
+            console.error("Background invoice/email error:", err);
+          }
+        });
       }
     }
 
