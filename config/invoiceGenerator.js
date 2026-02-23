@@ -28,7 +28,8 @@ const generateInvoice = async (order) => {
 
     doc.text("Products:");
     order.items.forEach((item, index) => {
-      doc.text(`${index + 1}. ${item.name} x ${item.quantity} = ₹${item.price}`);
+      const codeInfo = item.code ? ` (Code: ${item.code})` : "";
+      doc.text(`${index + 1}. ${item.name}${codeInfo} x ${item.quantity} = ₹${item.price}`);
     });
 
     doc.moveDown();

@@ -10,9 +10,12 @@ export const sendOrderEmail = async (toEmail, items, amount) => {
     },
   });
 
-  const itemList = items.map((item, i) =>
-    `${i + 1}. ${item.name} (Qty: ${item.quantity}) - ₹${item.price}`
-  ).join('\n');
+  const itemList = items
+    .map((item, i) => {
+      const codeInfo = item.code ? ` [Code: ${item.code}]` : "";
+      return `${i + 1}. ${item.name}${codeInfo} (Qty: ${item.quantity}) - ₹${item.price}`;
+    })
+    .join('\n');
 
   const mailOptions = {
     from: `"ForEver" <${process.env.EMAIL_USER}>`,

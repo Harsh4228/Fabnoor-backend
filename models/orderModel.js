@@ -18,6 +18,11 @@ const orderItemSchema = new mongoose.Schema(
       required: true, // product name at time of order
     },
 
+    // variant code snapshot (if available)
+    code: {
+      type: String,
+    },
+
     image: {
       type: String,
       required: true, // snapshot image

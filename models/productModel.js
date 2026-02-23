@@ -14,6 +14,11 @@ const colorVariantSchema = new mongoose.Schema(
       type: String,
       required: true, // Black, Blue, Red
     },
+    // unique identifier for this specific variant (used in orders/dispatch)
+    code: {
+      type: String,
+      required: true,
+    },
     type: {
       type: String,
       required: true, // Matte, Glossy
