@@ -254,17 +254,27 @@ const userOrders = async (req, res) => {
 const updateStatus = async (req, res) => {
   try {
     const { orderId, status } = req.body;
+    const allowedStatuses = [
+      "Order Placed",
+      "Dispatched",
+      "Out for Delivery",
+      "Delivered",
+      "Cancelled",
+    ];
 
-    const order = await orderModel.findByIdAndUpdate(
-      orderId,
-      { status },
-      { new: true }
-    );
-
-    if (!order) {
-      return res.json({ success: false, message: "Order not found" });
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: "Invalid status" });
     }
 
+    const order = await orderModel.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    order.status = status;
+    await order.save();
+
+    // on delivery, generate and send invoice
     if (status === "Delivered") {
       const user = await userModel.findById(order.userId);
       if (user?.email) {
@@ -273,7 +283,7 @@ const updateStatus = async (req, res) => {
       }
     }
 
-    res.json({ success: true, message: "Order status updated" });
+    res.json({ success: true, message: "Order status updated", order });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
