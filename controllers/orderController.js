@@ -1,10 +1,61 @@
 import orderModel from "../models/orderModel.js";
 import userModel from "../models/userModel.js";
+import productModel from "../models/productModel.js";
 import Razorpay from "razorpay";
 import crypto from "crypto";
 
 import { sendOrderEmail, sendInvoiceEmail } from "../config/emailService.js";
 import { generateInvoice } from "../config/invoiceGenerator.js";
+
+/* =========================
+   DEDUCT STOCK ON ORDER
+========================= */
+const deductStock = async (items) => {
+  if (!Array.isArray(items) || !items.length) return;
+
+  for (const item of items) {
+    try {
+      const product = await productModel.findById(item.productId);
+      if (!product) {
+        console.warn(`[stock] Product not found: ${item.productId}`);
+        continue;
+      }
+
+      // Find the matching variant index — by code first, then color + fabric/type fallback
+      const idx = product.variants.findIndex((v) => {
+        // code match is most reliable
+        if (item.code && v.code) return v.code === item.code;
+        // fallback: color + fabric/type
+        const vFabric = (v.fabric || v.type || "").trim().toLowerCase();
+        const itemFabric = (item.fabric || item.type || "").trim().toLowerCase();
+        return (
+          (v.color || "").toLowerCase() === (item.color || "").toLowerCase() &&
+          (vFabric === itemFabric || !vFabric || !itemFabric)
+        );
+      });
+
+      if (idx === -1) {
+        console.warn(`[stock] Variant not found for product ${item.productId} (code=${item.code}, color=${item.color})`);
+        continue;
+      }
+
+      const qty = Number(item.quantity || 1);
+      const currentStock = Number(product.variants[idx].stock || 0);
+      const newStock = Math.max(0, currentStock - qty);
+
+      // Use $set with positional path — avoids Mongoose subdoc change-detection bug
+      await productModel.findByIdAndUpdate(
+        item.productId,
+        { $set: { [`variants.${idx}.stock`]: newStock } },
+        { new: true }
+      );
+
+      console.log(`[stock] Deducted ${qty} from product ${item.productId} variant[${idx}] (${item.color}): ${currentStock} → ${newStock}`);
+    } catch (err) {
+      console.error(`[stock] Failed to deduct stock for product ${item.productId}:`, err.message);
+    }
+  }
+};
 
 /* =========================
    GLOBAL CONFIG
@@ -78,6 +129,14 @@ const placeOrder = async (req, res) => {
     await userModel.findByIdAndUpdate(req.user._id, {
       cartData: {},
     });
+
+    // ✅ Deduct stock (foreground — so failures are visible, not silent)
+    try {
+      await deductStock(items);
+    } catch (err) {
+      // Non-fatal — order is placed, just log the issue
+      console.error("[stock] deductStock error (COD):", err.message);
+    }
 
     // ✅ Send email
     if (req.user.email) {
@@ -224,6 +283,13 @@ const verifyRazorpay = async (req, res) => {
     await userModel.findByIdAndUpdate(order.userId, {
       cartData: {},
     });
+
+    // ✅ Deduct stock (foreground — so failures are visible)
+    try {
+      await deductStock(order.items);
+    } catch (err) {
+      console.error("[stock] deductStock error (Razorpay):", err.message);
+    }
 
     // ✅ Send email
     const user = await userModel.findById(order.userId);

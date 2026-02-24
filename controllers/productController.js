@@ -56,21 +56,21 @@ const addProduct = async (req, res) => {
     /* BUILD VARIANTS */
     const finalVariants = await Promise.all(
       parsedVariants.map(async (variant) => {
-        const { color, type, sizes, price, stock, code } = variant;
+        const { color, fabric, sizes, price, stock, code } = variant;
 
-        if (!color || !type || !Array.isArray(sizes) || !sizes.length) {
+        if (!color || !fabric || !Array.isArray(sizes) || !sizes.length) {
           throw new Error(`Invalid variant data for ${color}`);
         }
 
         if (!code || typeof code !== "string" || !code.trim()) {
-          throw new Error(`Variant code is required for ${color} ${type}`);
+          throw new Error(`Variant code is required for ${color} ${fabric}`);
         }
 
-        const imageKey = `${safeKey(color)}_${safeKey(type)}_images`;
+        const imageKey = `${safeKey(color)}_${safeKey(fabric)}_images`;
         const files = imageMap[imageKey] || [];
 
         if (!files.length) {
-          throw new Error(`Images required for ${color} (${type})`);
+          throw new Error(`Images required for ${color} (${fabric})`);
         }
 
         const images = await Promise.all(
@@ -85,7 +85,7 @@ const addProduct = async (req, res) => {
         return {
           color,
           code,
-          type,
+          fabric,
           images,
           sizes,
           price,
@@ -193,14 +193,14 @@ const editProduct = async (req, res) => {
 
     const updatedVariants = await Promise.all(
       parsedVariants.map(async (variant) => {
-        let { color, type, sizes, existingImages, price, stock = [], code } = variant;
+        let { color, fabric, sizes, existingImages, price, stock = [], code } = variant;
 
         // for legacy products the code may be missing; auto-generate a fallback
         if (!code || typeof code !== "string" || !code.trim()) {
-          code = `${safeKey(color)}_${safeKey(type)}`;
+          code = `${safeKey(color)}_${safeKey(fabric)}`;
         }
 
-        const imageKey = `${safeKey(color)}_${safeKey(type)}_images`;
+        const imageKey = `${safeKey(color)}_${safeKey(fabric)}_images`;
         const newFiles = imageMap[imageKey] || [];
 
         let images = existingImages;
@@ -218,7 +218,7 @@ const editProduct = async (req, res) => {
         return {
           color,
           code,
-          type,
+          fabric,
           images,
           sizes,
           price,

@@ -19,9 +19,9 @@ const colorVariantSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    type: {
+    fabric: {
       type: String,
-      required: true, // Matte, Glossy
+      required: true, // Cotton, Silk, Polyester
     },
     images: {
       type: [String],

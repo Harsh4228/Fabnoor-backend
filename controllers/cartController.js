@@ -2,19 +2,16 @@ import userModel from "../models/userModel.js";
 
 /**
  * =========================
- * ADD TO CART (WHOLESALE PACK)
+ * ADD TO CART
  * =========================
  */
 export const addToCart = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { itemId, color = "", type = "" } = req.body;
+    const { itemId, color = "", type = "", code = "" } = req.body;
 
     if (!itemId) {
-      return res.status(400).json({
-        success: false,
-        message: "Item ID required",
-      });
+      return res.status(400).json({ success: false, message: "Item ID required" });
     }
 
     const user = await userModel.findById(userId);
@@ -22,42 +19,45 @@ export const addToCart = async (req, res) => {
       return res.status(401).json({ success: false, message: "User not found" });
     }
 
-    const cart = user.cartData || {};
+    // Clone the cart data so Mongoose recognizes it as a completely new object
+    const cartData = structuredClone(user.cartData || {});
 
     // ✅ if not exists create pack object
-    if (!cart[itemId]) {
-      cart[itemId] = {
+    if (!cartData[itemId]) {
+      cartData[itemId] = {
         quantity: 1,
         color,
         type,
+        code,
       };
     } else {
       // ✅ increase qty
-      cart[itemId].quantity = Number(cart[itemId].quantity || 0) + 1;
+      cartData[itemId].quantity = Number(cartData[itemId].quantity || 0) + 1;
 
       // ✅ update variant info if provided
-      if (color) cart[itemId].color = color;
-      if (type) cart[itemId].type = type;
+      if (color) cartData[itemId].color = color;
+      if (type) cartData[itemId].type = type;
+      if (code) cartData[itemId].code = code;
     }
 
-    user.cartData = cart;
-    await user.save();
+    // Replace the entire object
+    await userModel.findByIdAndUpdate(userId, { cartData });
+
+    // Fetch new state
+    const updatedUser = await userModel.findById(userId).select("cartData");
 
     res.json({
       success: true,
-      cartData: user.cartData,
+      cartData: updatedUser.cartData || {},
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 /**
  * =========================
- * UPDATE CART (WHOLESALE PACK)
+ * UPDATE CART
  * =========================
  */
 export const updateCart = async (req, res) => {
@@ -66,10 +66,7 @@ export const updateCart = async (req, res) => {
     const { itemId, quantity } = req.body;
 
     if (!itemId) {
-      return res.status(400).json({
-        success: false,
-        message: "Item ID required",
-      });
+      return res.status(400).json({ success: false, message: "Item ID required" });
     }
 
     const user = await userModel.findById(userId);
@@ -77,37 +74,37 @@ export const updateCart = async (req, res) => {
       return res.status(401).json({ success: false, message: "User not found" });
     }
 
-    const cart = user.cartData || {};
+    // Clone the cart data
+    const cartData = structuredClone(user.cartData || {});
     const qty = Number(quantity);
 
     // ✅ remove product if qty <= 0
     if (qty <= 0) {
-      delete cart[itemId];
+      delete cartData[itemId];
     } else {
       // ✅ if product not exists create
-      if (!cart[itemId]) {
-        cart[itemId] = {
+      if (!cartData[itemId]) {
+        cartData[itemId] = {
           quantity: qty,
           color: "",
           type: "",
+          code: "",
         };
       } else {
-        cart[itemId].quantity = qty;
+        cartData[itemId].quantity = qty;
       }
     }
 
-    user.cartData = cart;
-    await user.save();
+    await userModel.findByIdAndUpdate(userId, { cartData });
+
+    const updatedUser = await userModel.findById(userId).select("cartData");
 
     res.json({
       success: true,
-      cartData: user.cartData,
+      cartData: updatedUser.cartData || {},
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -131,25 +128,21 @@ export const getUserCart = async (req, res) => {
       cartData: user.cartData || {},
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 /**
  * =========================
- * MERGE CART (BULK) - merge guest/local cart into user cart
- * Accepts { cartData: { [itemId]: { quantity, color, type } } }
+ * MERGE CART (BULK)
  * =========================
  */
 export const mergeCart = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { cartData } = req.body;
+    const { cartData: clientCartData } = req.body;
 
-    if (!cartData || typeof cartData !== "object") {
+    if (!clientCartData || typeof clientCartData !== "object") {
       return res.status(400).json({ success: false, message: "cartData required" });
     }
 
@@ -158,29 +151,32 @@ export const mergeCart = async (req, res) => {
       return res.status(401).json({ success: false, message: "User not found" });
     }
 
-    const serverCart = user.cartData || {};
+    const serverCart = structuredClone(user.cartData || {});
 
-    for (const itemId in cartData) {
-      const val = cartData[itemId] || {};
+    for (const itemId in clientCartData) {
+      const val = clientCartData[itemId] || {};
       const qty = Number(val.quantity || 0);
       const color = val.color || "";
       const type = val.type || "";
+      const code = val.code || "";
 
       if (qty <= 0) continue;
 
       if (!serverCart[itemId]) {
-        serverCart[itemId] = { quantity: qty, color, type };
+        serverCart[itemId] = { quantity: qty, color, type, code };
       } else {
         serverCart[itemId].quantity = Number(serverCart[itemId].quantity || 0) + qty;
         if (color) serverCart[itemId].color = color;
         if (type) serverCart[itemId].type = type;
+        if (code) serverCart[itemId].code = code;
       }
     }
 
-    user.cartData = serverCart;
-    await user.save();
+    await userModel.findByIdAndUpdate(userId, { cartData: serverCart });
 
-    res.json({ success: true, cartData: user.cartData });
+    const updatedUser = await userModel.findById(userId).select("cartData");
+
+    res.json({ success: true, cartData: updatedUser.cartData || {} });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

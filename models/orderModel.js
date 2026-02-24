@@ -23,6 +23,18 @@ const orderItemSchema = new mongoose.Schema(
       type: String,
     },
 
+    // fabric/type for variant identification (used by stock deduction)
+    fabric: {
+      type: String,
+      default: "",
+    },
+
+    // kept for backward compat with old orders
+    type: {
+      type: String,
+      default: "",
+    },
+
     image: {
       type: String,
       required: true, // snapshot image
