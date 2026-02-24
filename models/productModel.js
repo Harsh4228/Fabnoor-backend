@@ -12,32 +12,37 @@ const colorVariantSchema = new mongoose.Schema(
   {
     color: {
       type: String,
-      required: true, // Black, Blue, Red
-    },
-    // unique identifier for this specific variant (used in orders/dispatch)
-    code: {
-      type: String,
       required: true,
     },
+    // NEW field name (from rename)
     fabric: {
       type: String,
-      required: true, // Cotton, Silk, Polyester
+      default: "",
+    },
+    // KEPT for backward compat with older products
+    type: {
+      type: String,
+      default: "",
+    },
+    // variant code — not required so old products without codes still work
+    code: {
+      type: String,
+      default: "",
     },
     images: {
       type: [String],
-      required: true, // images for this color
+      required: true,
     },
     sizes: {
       type: [String],
       required: true,
     },
     price: {
-      type: Number, // price for this size
+      type: Number,
       required: true,
     },
     stock: {
       type: Number,
-      required: true,
       default: 0,
     },
   },

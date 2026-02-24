@@ -18,77 +18,82 @@ const deductStock = async (items) => {
       const pid = item.productId?.toString();
       const qty = Number(item.quantity || 1);
       const code = (item.code || "").trim();
-      const color = (item.color || "").trim();
-      const fabric = (item.fabric || item.type || "").trim();
+      const color = (item.color || "").trim().toLowerCase();
+      const fabric = (item.fabric || item.type || "").trim().toLowerCase();
 
       if (!pid) {
-        console.warn("[stock] skipping item with no productId");
+        console.warn("[stock] skipping item - no productId");
         continue;
       }
 
-      let matched = false;
+      // Use .lean() to get RAW MongoDB document — bypasses Mongoose strict mode.
+      // This means ALL fields are visible (including old `type` field on legacy products).
+      const product = await productModel.findById(pid).lean();
 
-      // 1️⃣ Match by variant code — most specific
+      if (!product || !product.variants?.length) {
+        console.warn(`[stock] product not found or no variants: ${pid}`);
+        continue;
+      }
+
+      // Find variant index with priority fallbacks
+      let idx = -1;
+
+      // 1. Exact code match (most reliable — code is unique per variant)
       if (code) {
-        const res = await productModel.updateOne(
-          { _id: pid, "variants.code": code },
-          { $inc: { "variants.$.stock": -qty } }
+        idx = product.variants.findIndex(
+          (v) => (v.code || "").trim() === code
         );
-        if (res.modifiedCount > 0) {
-          console.log(`[stock] ✅ code="${code}" → deducted ${qty} for product ${pid}`);
-          matched = true;
-        }
       }
 
-      // 2️⃣ Match by color + fabric — using $elemMatch so $ refers to the correct element
-      if (!matched && (color || fabric)) {
-        const elemMatch = {};
-        if (color) elemMatch.color = new RegExp(`^${color}$`, "i");
-        if (fabric) elemMatch.fabric = new RegExp(`^${fabric}$`, "i");
-
-        const res = await productModel.updateOne(
-          { _id: pid, variants: { $elemMatch: elemMatch } },
-          { $inc: { "variants.$.stock": -qty } }
-        );
-        if (res.modifiedCount > 0) {
-          console.log(`[stock] ✅ color="${color}" fabric="${fabric}" → deducted ${qty} for product ${pid}`);
-          matched = true;
-        }
+      // 2. color + fabric match (new schema)
+      if (idx === -1 && (color || fabric)) {
+        idx = product.variants.findIndex((v) => {
+          const vColor = (v.color || "").trim().toLowerCase();
+          const vFabric = (v.fabric || "").trim().toLowerCase();
+          return vColor === color && vFabric === fabric;
+        });
       }
 
-      // 3️⃣ Match by color + type (old schema compat)
-      if (!matched && (color || fabric)) {
-        const elemMatch = {};
-        if (color) elemMatch.color = new RegExp(`^${color}$`, "i");
-        if (fabric) elemMatch.type = new RegExp(`^${fabric}$`, "i");
-
-        const res = await productModel.updateOne(
-          { _id: pid, variants: { $elemMatch: elemMatch } },
-          { $inc: { "variants.$.stock": -qty } }
-        );
-        if (res.modifiedCount > 0) {
-          console.log(`[stock] ✅ color="${color}" type="${fabric}" → deducted ${qty} for product ${pid}`);
-          matched = true;
-        }
+      // 3. color + type match (OLD schema — type field was before rename)
+      if (idx === -1 && (color || fabric)) {
+        idx = product.variants.findIndex((v) => {
+          const vColor = (v.color || "").trim().toLowerCase();
+          const vType = (v.type || "").trim().toLowerCase();
+          return vColor === color && vType === fabric;
+        });
       }
 
-      // 4️⃣ Last resort — match by color alone
-      if (!matched && color) {
-        const res = await productModel.updateOne(
-          { _id: pid, variants: { $elemMatch: { color: new RegExp(`^${color}$`, "i") } } },
-          { $inc: { "variants.$.stock": -qty } }
+      // 4. color-only match (last resort for simple products)
+      if (idx === -1 && color) {
+        idx = product.variants.findIndex(
+          (v) => (v.color || "").trim().toLowerCase() === color
         );
-        if (res.modifiedCount > 0) {
-          console.log(`[stock] ✅ color="${color}" only → deducted ${qty} for product ${pid}`);
-          matched = true;
-        }
       }
 
-      if (!matched) {
-        console.warn(`[stock] ❌ No variant matched for product ${pid} (code=${code}, color=${color}, fabric=${fabric})`);
+      // 5. Just use first variant if all else fails
+      if (idx === -1) {
+        console.warn(`[stock] no variant match for product ${pid} (code=${code}, color=${color}, fabric=${fabric}), using first variant`);
+        idx = 0;
+      }
+
+      const currentStock = Number(product.variants[idx].stock ?? 0);
+      const newStock = Math.max(0, currentStock - qty);
+
+      // Direct index-based $set — bypasses ALL subdoc change-detection issues
+      const updateRes = await productModel.updateOne(
+        { _id: pid },
+        { $set: { [`variants.${idx}.stock`]: newStock } }
+      );
+
+      if (updateRes.modifiedCount > 0) {
+        console.log(
+          `[stock] ✅ product=${pid} variant[${idx}] (${product.variants[idx].color}) stock: ${currentStock} → ${newStock} (deducted ${qty})`
+        );
+      } else {
+        console.warn(`[stock] ⚠️ updateOne matched 0 docs for product ${pid}`);
       }
     } catch (err) {
-      console.error(`[stock] ❌ Error for product ${item?.productId}:`, err.message);
+      console.error(`[stock] ❌ error for product ${item?.productId}:`, err.message);
     }
   }
 };
