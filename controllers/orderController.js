@@ -15,44 +15,80 @@ const deductStock = async (items) => {
 
   for (const item of items) {
     try {
-      const product = await productModel.findById(item.productId);
-      if (!product) {
-        console.warn(`[stock] Product not found: ${item.productId}`);
-        continue;
-      }
-
-      // Find the matching variant index — by code first, then color + fabric/type fallback
-      const idx = product.variants.findIndex((v) => {
-        // code match is most reliable
-        if (item.code && v.code) return v.code === item.code;
-        // fallback: color + fabric/type
-        const vFabric = (v.fabric || v.type || "").trim().toLowerCase();
-        const itemFabric = (item.fabric || item.type || "").trim().toLowerCase();
-        return (
-          (v.color || "").toLowerCase() === (item.color || "").toLowerCase() &&
-          (vFabric === itemFabric || !vFabric || !itemFabric)
-        );
-      });
-
-      if (idx === -1) {
-        console.warn(`[stock] Variant not found for product ${item.productId} (code=${item.code}, color=${item.color})`);
-        continue;
-      }
-
+      const pid = item.productId?.toString();
       const qty = Number(item.quantity || 1);
-      const currentStock = Number(product.variants[idx].stock || 0);
-      const newStock = Math.max(0, currentStock - qty);
+      const code = (item.code || "").trim();
+      const color = (item.color || "").trim();
+      const fabric = (item.fabric || item.type || "").trim();
 
-      // Use $set with positional path — avoids Mongoose subdoc change-detection bug
-      await productModel.findByIdAndUpdate(
-        item.productId,
-        { $set: { [`variants.${idx}.stock`]: newStock } },
-        { new: true }
-      );
+      if (!pid) {
+        console.warn("[stock] skipping item with no productId");
+        continue;
+      }
 
-      console.log(`[stock] Deducted ${qty} from product ${item.productId} variant[${idx}] (${item.color}): ${currentStock} → ${newStock}`);
+      let matched = false;
+
+      // 1️⃣ Match by variant code — most specific
+      if (code) {
+        const res = await productModel.updateOne(
+          { _id: pid, "variants.code": code },
+          { $inc: { "variants.$.stock": -qty } }
+        );
+        if (res.modifiedCount > 0) {
+          console.log(`[stock] ✅ code="${code}" → deducted ${qty} for product ${pid}`);
+          matched = true;
+        }
+      }
+
+      // 2️⃣ Match by color + fabric — using $elemMatch so $ refers to the correct element
+      if (!matched && (color || fabric)) {
+        const elemMatch = {};
+        if (color) elemMatch.color = new RegExp(`^${color}$`, "i");
+        if (fabric) elemMatch.fabric = new RegExp(`^${fabric}$`, "i");
+
+        const res = await productModel.updateOne(
+          { _id: pid, variants: { $elemMatch: elemMatch } },
+          { $inc: { "variants.$.stock": -qty } }
+        );
+        if (res.modifiedCount > 0) {
+          console.log(`[stock] ✅ color="${color}" fabric="${fabric}" → deducted ${qty} for product ${pid}`);
+          matched = true;
+        }
+      }
+
+      // 3️⃣ Match by color + type (old schema compat)
+      if (!matched && (color || fabric)) {
+        const elemMatch = {};
+        if (color) elemMatch.color = new RegExp(`^${color}$`, "i");
+        if (fabric) elemMatch.type = new RegExp(`^${fabric}$`, "i");
+
+        const res = await productModel.updateOne(
+          { _id: pid, variants: { $elemMatch: elemMatch } },
+          { $inc: { "variants.$.stock": -qty } }
+        );
+        if (res.modifiedCount > 0) {
+          console.log(`[stock] ✅ color="${color}" type="${fabric}" → deducted ${qty} for product ${pid}`);
+          matched = true;
+        }
+      }
+
+      // 4️⃣ Last resort — match by color alone
+      if (!matched && color) {
+        const res = await productModel.updateOne(
+          { _id: pid, variants: { $elemMatch: { color: new RegExp(`^${color}$`, "i") } } },
+          { $inc: { "variants.$.stock": -qty } }
+        );
+        if (res.modifiedCount > 0) {
+          console.log(`[stock] ✅ color="${color}" only → deducted ${qty} for product ${pid}`);
+          matched = true;
+        }
+      }
+
+      if (!matched) {
+        console.warn(`[stock] ❌ No variant matched for product ${pid} (code=${code}, color=${color}, fabric=${fabric})`);
+      }
     } catch (err) {
-      console.error(`[stock] Failed to deduct stock for product ${item.productId}:`, err.message);
+      console.error(`[stock] ❌ Error for product ${item?.productId}:`, err.message);
     }
   }
 };
