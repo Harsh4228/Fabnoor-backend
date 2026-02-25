@@ -18,6 +18,7 @@ import cartRouter from "./routes/cartRoute.js";
 import orderRouter from "./routes/orderRoute.js";
 import reelRoutes from "./routes/reelRoutes.js";
 import wishlistRoutes from "./routes/wishlistRoutes.js";
+import reviewRouter from "./routes/reviewRoute.js";
 import cors from "cors";
 
 
@@ -59,6 +60,7 @@ app.use("/api/cart", cartRouter);
 app.use("/api/order", orderRouter);
 app.use("/api/reels", reelRoutes);
 app.use("/api/wishlist", wishlistRoutes);
+app.use("/api/review", reviewRouter);
 
 // Health
 app.get("/", (req, res) => {

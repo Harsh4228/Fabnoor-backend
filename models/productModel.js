@@ -1,6 +1,52 @@
 import mongoose from "mongoose";
 
 /**
+ * Review Schema
+ */
+const reviewSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "user",
+      required: true,
+    },
+    userName: {
+      type: String,
+      default: "Anonymous",
+    },
+    rating: {
+      type: Number,
+      required: true,
+      min: 1,
+      max: 5,
+    },
+    comment: {
+      type: String,
+      default: "",
+    },
+    // variant identification
+    variantCode: {
+      type: String,
+      default: "",
+    },
+    variantColor: {
+      type: String,
+      default: "",
+    },
+    // track which order this came from (to prevent double-reviews)
+    orderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "order",
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: true }
+);
+
+/**
  * Size-wise price & stock
  */
 
@@ -87,6 +133,12 @@ const productSchema = new mongoose.Schema({
   date: {
     type: Number,
     required: true,
+  },
+
+  // Embedded reviews
+  reviews: {
+    type: [reviewSchema],
+    default: [],
   },
 });
 

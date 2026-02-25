@@ -148,6 +148,12 @@ const orderSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+
+    // Tracks reviewed items: "productId_variantCode" or "productId_variantColor"
+    reviewedItems: {
+      type: [String],
+      default: [],
+    },
   },
   { timestamps: true }
 );
