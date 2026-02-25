@@ -39,17 +39,31 @@ const submitReview = async (req, res) => {
         // Build the dedupe key (same logic used on frontend)
         const reviewKey = `${productId}_${variantCode || variantColor}`;
 
+        // Safe access: old orders may not have reviewedItems field
+        const reviewedItems = order.reviewedItems || [];
+
         // Check if already reviewed
-        if (order.reviewedItems.includes(reviewKey)) {
+        if (reviewedItems.includes(reviewKey)) {
             return res.status(409).json({ success: false, message: "You have already reviewed this item" });
         }
 
         // Verify the item actually belongs to this order
-        const orderItem = order.items.find(
-            (item) =>
-                item.productId?.toString() === productId &&
-                (variantCode ? (item.code || "") === variantCode : (item.color || "") === variantColor)
-        );
+        // Support multiple matching strategies, same as stock deduction
+        const productIdStr = String(productId);
+        const vc = (variantCode || "").trim();
+        const vColor = (variantColor || "").trim().toLowerCase();
+
+        const orderItem = order.items.find((item) => {
+            if (item.productId?.toString() !== productIdStr) return false;
+            // 1. exact code match
+            if (vc && (item.code || "").trim() === vc) return true;
+            // 2. color match (fallback — no code or code empty)
+            if (vColor && (item.color || "").trim().toLowerCase() === vColor) return true;
+            // 3. product ID alone (single-variant products)
+            if (!vc && !vColor) return true;
+            return false;
+        });
+
         if (!orderItem) {
             return res.status(404).json({ success: false, message: "Item not found in this order" });
         }
@@ -76,8 +90,13 @@ const submitReview = async (req, res) => {
 
         await product.save();
 
-        // Mark order item as reviewed
-        order.reviewedItems.push(reviewKey);
+        // Mark order item as reviewed — safely handle legacy docs without reviewedItems
+        if (!order.reviewedItems) {
+            order.reviewedItems = [reviewKey];
+        } else {
+            order.reviewedItems.push(reviewKey);
+        }
+        order.markModified("reviewedItems"); // ensure Mongoose detects the change
         await order.save();
 
         res.json({ success: true, message: "Review submitted successfully" });
