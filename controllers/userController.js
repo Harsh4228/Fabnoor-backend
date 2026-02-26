@@ -51,7 +51,7 @@ const loginUser = async (req, res) => {
 /* ================= USER REGISTER ================= */
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password,mobile} = req.body;
+    const { name, email, password, mobile } = req.body;
 
     const exists = await userModel.findOne({ email });
     if (exists) {
@@ -151,15 +151,21 @@ const getProfile = async (req, res) => {
 /* ================= UPDATE PROFILE ================= */
 const updateProfile = async (req, res) => {
   try {
-    const { name, mobile } = req.body;
-    if (mobile.length!=10)
-    {
-      return res.json({ success: false, message: "Invalid credentials" });
+    const { name, mobile, dob, gender, address } = req.body;
+
+    // Check mobile if provided
+    if (mobile && mobile.length !== 10) {
+      return res.json({ success: false, message: "Invalid mobile number" });
     }
+
+    const updateFields = { name, mobile };
+    if (dob !== undefined) updateFields.dob = dob;
+    if (gender !== undefined) updateFields.gender = gender;
+    if (address !== undefined) updateFields.address = address;
 
     const user = await userModel.findByIdAndUpdate(
       req.user._id,
-      { name , mobile},
+      updateFields,
       { new: true }
     ).select("-password");
 

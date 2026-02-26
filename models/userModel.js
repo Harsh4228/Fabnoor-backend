@@ -18,7 +18,7 @@ const wishlistSchema = new mongoose.Schema(
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
-    mobile:{type:String, required:true},
+    mobile: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
 
@@ -27,6 +27,16 @@ const userSchema = new mongoose.Schema(
     wishlist: {
       type: [wishlistSchema],
       default: [],
+    },
+
+    dob: { type: String, default: "" },
+    gender: { type: String, enum: ["Male", "Female", "Other", ""], default: "" },
+    address: {
+      street: { type: String, default: "" },
+      city: { type: String, default: "" },
+      state: { type: String, default: "" },
+      zipcode: { type: String, default: "" },
+      country: { type: String, default: "" },
     },
 
     role: {
