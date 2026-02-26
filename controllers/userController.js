@@ -1,6 +1,7 @@
 import validator from "validator";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 import userModel from "../models/userModel.js";
 
 /* ================= TOKEN ================= */
@@ -182,4 +183,35 @@ const updateProfile = async (req, res) => {
   }
 };
 
-export { loginUser, registerUser, adminLogin, getProfile, updateProfile };
+/* ================= GET ALL USERS (ADMIN) ================= */
+const getAllUsers = async (req, res) => {
+  try {
+    const users = await userModel.find({}).select("-password").sort({ createdAt: -1 });
+    res.json({ success: true, users });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/* ================= GET USER FULL DETAILS (ADMIN) ================= */
+const getUserFullDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await userModel.findById(id).select("-password").lean();
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // Since we also need to pull up this user's orders, import orderModel dynamically or ensure it's available.
+    // For simplicity, we can just use mongoose.model('order') which works because orderModel is already registered.
+    const orderModel = mongoose.model('order');
+    const orders = await orderModel.find({ userId: id }).sort({ createdAt: -1 }).lean();
+
+    res.json({ success: true, user, orders });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export { loginUser, registerUser, adminLogin, getProfile, updateProfile, getAllUsers, getUserFullDetails };
