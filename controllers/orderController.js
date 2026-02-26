@@ -363,7 +363,7 @@ const allOrders = async (req, res) => {
   try {
     const orders = await orderModel
       .find({})
-      .populate("userId", "email name")
+      .populate("userId", "-password") // ✅ Exclude only password to securely give admin all profile data
       .sort({ createdAt: -1 });
 
     res.json({ success: true, orders });

@@ -51,7 +51,11 @@ const loginUser = async (req, res) => {
 /* ================= USER REGISTER ================= */
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password, mobile } = req.body;
+    const { name, email, password, mobile, shopName } = req.body;
+
+    if (!shopName) {
+      return res.json({ success: false, message: "Shop Name is required" });
+    }
 
     const exists = await userModel.findOne({ email });
     if (exists) {
@@ -76,6 +80,7 @@ const registerUser = async (req, res) => {
       name,
       email,
       mobile,
+      shopName,
       password: hashedPassword,
       role: "user", // ✅ default role
     });
@@ -90,6 +95,7 @@ const registerUser = async (req, res) => {
         name: user.name,
         role: user.role,
         mobile: user.mobile,
+        shopName: user.shopName,
       },
     });
   } catch (error) {
@@ -151,7 +157,7 @@ const getProfile = async (req, res) => {
 /* ================= UPDATE PROFILE ================= */
 const updateProfile = async (req, res) => {
   try {
-    const { name, mobile, dob, gender, address } = req.body;
+    const { name, mobile, dob, gender, address, shopName } = req.body;
 
     // Check mobile if provided
     if (mobile && mobile.length !== 10) {
@@ -162,6 +168,7 @@ const updateProfile = async (req, res) => {
     if (dob !== undefined) updateFields.dob = dob;
     if (gender !== undefined) updateFields.gender = gender;
     if (address !== undefined) updateFields.address = address;
+    if (shopName !== undefined) updateFields.shopName = shopName;
 
     const user = await userModel.findByIdAndUpdate(
       req.user._id,
