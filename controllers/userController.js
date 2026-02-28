@@ -214,4 +214,20 @@ const getUserFullDetails = async (req, res) => {
   }
 };
 
-export { loginUser, registerUser, adminLogin, getProfile, updateProfile, getAllUsers, getUserFullDetails };
+/* ================= DELETE USER (ADMIN) ================= */
+const deleteUser = async (req, res) => {
+  try {
+    const { id } = req.body;
+    const user = await userModel.findByIdAndDelete(id);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.json({ success: true, message: "User deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export { loginUser, registerUser, adminLogin, getProfile, updateProfile, getAllUsers, getUserFullDetails, deleteUser };
