@@ -54,8 +54,15 @@ const registerUser = async (req, res) => {
   try {
     const { name, email, password, mobile, shopName } = req.body;
 
-    if (!shopName) {
+    // Validate required fields are not just whitespace
+    if (!name || name.trim() === "") {
+      return res.json({ success: false, message: "Name is required" });
+    }
+    if (!shopName || shopName.trim() === "") {
       return res.json({ success: false, message: "Shop Name is required" });
+    }
+    if (!mobile || mobile.trim() === "") {
+      return res.json({ success: false, message: "Mobile number is required" });
     }
 
     const exists = await userModel.findOne({ email });
