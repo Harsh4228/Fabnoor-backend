@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import userModel from "../models/userModel.js";
+import { sendResetOtpEmail } from "../config/emailService.js";
 
 /* ================= TOKEN ================= */
 const createToken = (user) => {
@@ -257,10 +258,6 @@ const requestResetOtp = async (req, res) => {
     user.resetOtp = otp;
     user.resetOtpExpireAt = expireAt;
     await user.save();
-
-    // Dynamically import the email service function here or import at top
-    // Since we can import it at top or require, let's just require it.
-    const { sendResetOtpEmail } = await import("../config/emailService.js");
 
     // Fire and forget the email to prevent frontend timeout
     sendResetOtpEmail(user.email, otp).catch(err => {
