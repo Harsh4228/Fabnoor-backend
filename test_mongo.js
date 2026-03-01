@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-require("dotenv").config({ path: "e:/Fabnoor/Fabnoor-Backend/.env" });
+require("dotenv").config({ path: "e:/Fabnoor/Fabnoor-backend/.env" });
 
 const userSchema = new mongoose.Schema(
     {
