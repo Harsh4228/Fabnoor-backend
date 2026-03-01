@@ -78,3 +78,36 @@ export const sendInvoiceEmail = async (toEmail, pdfBuffer) => {
     return false;
   }
 };
+
+// Reset Password OTP Email
+export const sendResetOtpEmail = async (toEmail, otp) => {
+  try {
+    const mailOptions = {
+      from: `"ForEver" <${process.env.EMAIL_USER || "no-reply@local"}>`,
+      to: toEmail,
+      subject: "🔒 Password Reset OTP - ForEver",
+      text: `Hi there,\n\nYou requested to reset your password. Here is your One-Time Password (OTP):\n\n${otp}\n\nThis OTP is valid for 10 minutes. If you did not request this, please ignore this email.\n\nBest regards,\nTeam ForEver`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+          <h2 style="color: #ec4899;">Password Reset Request</h2>
+          <p>Hi there,</p>
+          <p>You recently requested to reset your password for your <strong>ForEver</strong> account. Here is your One-Time Password (OTP):</p>
+          <div style="background-color: #f3f4f6; padding: 15px; text-align: center; border-radius: 8px; margin: 20px 0;">
+            <h1 style="letter-spacing: 5px; margin: 0; color: #111;">${otp}</h1>
+          </div>
+          <p style="color: #666; font-size: 14px;">This OTP is valid for <strong>10 minutes</strong>. Do not share this OTP with anyone.</p>
+          <p style="color: #666; font-size: 14px;">If you did not request a password reset, you can safely ignore this email.</p>
+          <hr style="border: none; border-top: 1px solid #eaeaea; margin: 30px 0;" />
+          <p style="font-size: 12px; color: #999;">Team ForEver</p>
+        </div>
+      `
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log("✅ Reset OTP email sent (or queued):", toEmail, info && info.accepted ? info.accepted : "OK");
+    return true;
+  } catch (err) {
+    console.error("❌ Error sending reset OTP email:", err);
+    return false;
+  }
+};
