@@ -237,4 +237,82 @@ const deleteUser = async (req, res) => {
   }
 };
 
-export { loginUser, registerUser, adminLogin, getProfile, updateProfile, getAllUsers, getUserFullDetails, deleteUser };
+/* ================= REQUEST RESET OTP ================= */
+const requestResetOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.json({ success: false, message: "Email is required" });
+    }
+
+    const user = await userModel.findOne({ email });
+    if (!user) {
+      return res.json({ success: false, message: "User not found" });
+    }
+
+    // Generate a 6-digit number string
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expireAt = Date.now() + 10 * 60 * 1000; // 10 minutes from now
+
+    user.resetOtp = otp;
+    user.resetOtpExpireAt = expireAt;
+    await user.save();
+
+    // Dynamically import the email service function here or import at top
+    // Since we can import it at top or require, let's just require it.
+    const { sendResetOtpEmail } = await import("../config/emailService.js");
+    const emailSent = await sendResetOtpEmail(user.email, otp);
+
+    if (emailSent) {
+      res.json({ success: true, message: "OTP sent to your email" });
+    } else {
+      res.json({ success: false, message: "Failed to send OTP email" });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/* ================= RESET PASSWORD ================= */
+const resetPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+      return res.json({ success: false, message: "Missing required fields" });
+    }
+
+    if (newPassword.length < 8) {
+      return res.json({ success: false, message: "Password must be at least 8 characters" });
+    }
+
+    const user = await userModel.findOne({ email });
+    if (!user) {
+      return res.json({ success: false, message: "User not found" });
+    }
+
+    // Verify OTP and Expiration
+    if (user.resetOtp !== otp) {
+      return res.json({ success: false, message: "Invalid OTP" });
+    }
+
+    if (Date.now() > user.resetOtpExpireAt) {
+      return res.json({ success: false, message: "OTP has expired" });
+    }
+
+    // Hash the new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    user.password = hashedPassword;
+    user.resetOtp = "";
+    user.resetOtpExpireAt = 0;
+    await user.save();
+
+    res.json({ success: true, message: "Password reset successfully. Please login." });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export { loginUser, registerUser, adminLogin, getProfile, updateProfile, getAllUsers, getUserFullDetails, deleteUser, requestResetOtp, resetPassword };
