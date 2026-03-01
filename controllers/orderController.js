@@ -99,6 +99,70 @@ const deductStock = async (items) => {
 };
 
 /* =========================
+   VALIDATE ORDER PRICES
+========================= */
+const validateOrderPrices = async (items, clientTotal, deliveryFee = 0) => {
+  if (!Array.isArray(items) || !items.length) {
+    throw new Error("Cart is empty");
+  }
+
+  let calculatedTotal = 0;
+
+  for (const item of items) {
+    const pid = item.productId?.toString();
+    const qty = Number(item.quantity || 1);
+    const code = (item.code || "").trim();
+    const color = (item.color || "").trim().toLowerCase();
+    const fabric = (item.fabric || item.type || "").trim().toLowerCase();
+
+    if (!pid) throw new Error("Invalid item in cart");
+
+    const product = await productModel.findById(pid).lean();
+    if (!product || !product.variants?.length) {
+      throw new Error(`Product not found: ${item.name || pid}`);
+    }
+
+    let idx = -1;
+    if (code) idx = product.variants.findIndex(v => (v.code || "").trim() === code);
+    if (idx === -1 && (color || fabric)) {
+      idx = product.variants.findIndex(v => {
+        const vColor = (v.color || "").trim().toLowerCase();
+        const vFabric = (v.fabric || "").trim().toLowerCase();
+        return vColor === color && vFabric === fabric;
+      });
+    }
+    if (idx === -1 && (color || fabric)) {
+      idx = product.variants.findIndex(v => {
+        const vColor = (v.color || "").trim().toLowerCase();
+        const vType = (v.type || "").trim().toLowerCase();
+        return vColor === color && vType === fabric;
+      });
+    }
+    if (idx === -1 && color) {
+      idx = product.variants.findIndex(v => (v.color || "").trim().toLowerCase() === color);
+    }
+    if (idx === -1) idx = 0;
+
+    const matchedVariant = product.variants[idx];
+
+    // Calculate full pack price: per-piece price * number of sizes in the pack
+    const perPiecePrice = Number(matchedVariant?.price || 0);
+    const pieces = Math.max(Number(matchedVariant?.sizes?.length || 1), 1);
+    const packPrice = perPiecePrice * pieces;
+
+    calculatedTotal += packPrice * qty;
+  }
+
+  const expectedTotal = calculatedTotal + deliveryFee;
+
+  if (expectedTotal !== clientTotal) {
+    throw new Error(`Price mismatch. The product prices have been updated. Expected: ₹${expectedTotal}, Received: ₹${clientTotal}. Please refresh your cart.`);
+  }
+
+  return true;
+};
+
+/* =========================
    GLOBAL CONFIG
 ========================= */
 const currency = "INR";
@@ -133,6 +197,16 @@ const placeOrder = async (req, res) => {
 
     // Log whether an Authorization header was present (mask not logged here to avoid leaking tokens)
     console.log('[order] placeOrder called - Authorization header present:', !!req.headers?.authorization);
+
+    // ✅ ENFORCE PRICE VALIDATION
+    try {
+      await validateOrderPrices(items, amount);
+    } catch (validationErr) {
+      return res.status(400).json({
+        success: false,
+        message: validationErr.message,
+      });
+    }
 
     if (!req.user || !req.user._id) {
       console.warn('[order] User not authenticated - request headers:', {
@@ -222,6 +296,16 @@ const placeOrderRazorpay = async (req, res) => {
       return res.status(401).json({
         success: false,
         message: "User not authenticated",
+      });
+    }
+
+    // ✅ ENFORCE PRICE VALIDATION
+    try {
+      await validateOrderPrices(items, amount);
+    } catch (validationErr) {
+      return res.status(400).json({
+        success: false,
+        message: validationErr.message,
       });
     }
 
