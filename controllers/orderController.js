@@ -240,10 +240,28 @@ const placeOrder = async (req, res) => {
       status: "Order Placed",
     });
 
-    // ✅ Clear cart
-    await userModel.findByIdAndUpdate(req.user._id, {
-      cartData: {},
-    });
+    // ✅ Clear cart and Save Address if empty
+    const updateData = { cartData: {} };
+
+    // Check if user has an empty address, if so, save this new address
+    // Mongoose creates the address object with empty strings by default
+    const isAddressEmpty = !req.user.address || !req.user.address.street || req.user.address.street.trim() === "";
+    if (isAddressEmpty && address) {
+      updateData.address = {
+        street: address.addressLine || address.street || "",
+        city: address.city || "",
+        state: address.state || "",
+        zipcode: address.pincode || address.zipcode || "",
+        country: address.country || "",
+      };
+
+      // Also save mobile if empty
+      if (!req.user.mobile && address.phone) {
+        updateData.mobile = address.phone;
+      }
+    }
+
+    await userModel.findByIdAndUpdate(req.user._id, updateData, { new: true });
 
     // ✅ Deduct stock (foreground — so failures are visible, not silent)
     try {
@@ -329,6 +347,24 @@ const placeOrderRazorpay = async (req, res) => {
       payment: false,
       status: "Payment Pending",
     });
+
+    // ✅ Save Address if empty
+    const isAddressEmpty = !req.user.address || !req.user.address.street || req.user.address.street.trim() === "";
+    if (isAddressEmpty && address) {
+      const updateData = {};
+      updateData.address = {
+        street: address.addressLine || address.street || "",
+        city: address.city || "",
+        state: address.state || "",
+        zipcode: address.pincode || address.zipcode || "",
+        country: address.country || "",
+      };
+
+      if (!req.user.mobile && address.phone) {
+        updateData.mobile = address.phone;
+      }
+      await userModel.findByIdAndUpdate(req.user._id, updateData, { new: true });
+    }
 
     if (!razorpayInstance) {
       return res.status(501).json({ success: false, message: "Razorpay not configured" });
