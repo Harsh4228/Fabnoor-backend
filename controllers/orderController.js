@@ -243,7 +243,7 @@ const placeOrderRazorpay = async (req, res) => {
       address,
       paymentMethod: "Razorpay",
       payment: false,
-      status: "Order Placed",
+      status: "Payment Pending",
     });
 
     if (!razorpayInstance) {
@@ -362,7 +362,7 @@ const verifyRazorpay = async (req, res) => {
 const allOrders = async (req, res) => {
   try {
     const orders = await orderModel
-      .find({})
+      .find({ status: { $ne: "Payment Pending" } })
       .populate("userId", "-password") // ✅ Exclude only password to securely give admin all profile data
       .sort({ createdAt: -1 });
 
@@ -378,7 +378,7 @@ const allOrders = async (req, res) => {
 const userOrders = async (req, res) => {
   try {
     const orders = await orderModel
-      .find({ userId: req.user._id }) // ✅ FIX
+      .find({ userId: req.user._id, status: { $ne: "Payment Pending" } }) // ✅ FIX
       .sort({ createdAt: -1 });
 
     res.json({ success: true, orders });
