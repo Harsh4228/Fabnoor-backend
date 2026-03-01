@@ -261,13 +261,13 @@ const requestResetOtp = async (req, res) => {
     // Dynamically import the email service function here or import at top
     // Since we can import it at top or require, let's just require it.
     const { sendResetOtpEmail } = await import("../config/emailService.js");
-    const emailSent = await sendResetOtpEmail(user.email, otp);
 
-    if (emailSent) {
-      res.json({ success: true, message: "OTP sent to your email" });
-    } else {
-      res.json({ success: false, message: "Failed to send OTP email" });
-    }
+    // Fire and forget the email to prevent frontend timeout
+    sendResetOtpEmail(user.email, otp).catch(err => {
+      console.error("Background sendResetOtpEmail error:", err);
+    });
+
+    res.json({ success: true, message: "OTP sent to your email" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
