@@ -203,9 +203,9 @@ const editProduct = async (req, res) => {
         const imageKey = `${safeKey(color)}_${safeKey(fabric)}_images`;
         const newFiles = imageMap[imageKey] || [];
 
-        let images = existingImages;
+        let images = Array.isArray(existingImages) ? [...existingImages] : [];
         if (newFiles.length) {
-          images = await Promise.all(
+          const newUploadedImages = await Promise.all(
             newFiles.map(async (file) => {
               const res = await cloudinary.uploader.upload(file.path, {
                 folder: "products",
@@ -213,6 +213,7 @@ const editProduct = async (req, res) => {
               return res.secure_url;
             })
           );
+          images = [...images, ...newUploadedImages];
         }
 
         return {
