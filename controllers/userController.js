@@ -194,8 +194,20 @@ const updateProfile = async (req, res) => {
 /* ================= GET ALL USERS (ADMIN) ================= */
 const getAllUsers = async (req, res) => {
   try {
-    const users = await userModel.find({}).select("-password").sort({ createdAt: -1 });
-    res.json({ success: true, users });
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 0;
+
+    const totalCount = await userModel.countDocuments({});
+
+    let usersQuery = userModel.find({}).select("-password").sort({ createdAt: -1 });
+
+    if (limit > 0) {
+      usersQuery = usersQuery.skip((page - 1) * limit).limit(limit);
+    }
+
+    const users = await usersQuery;
+
+    res.json({ success: true, users, totalCount });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -216,7 +228,26 @@ const getUserFullDetails = async (req, res) => {
     const orderModel = mongoose.model('order');
     const orders = await orderModel.find({ userId: id }).sort({ createdAt: -1 }).lean();
 
-    res.json({ success: true, user, orders });
+    // Fetch products in the user's cart and wishlist so the admin panel can display them
+    const cartData = user.cartData || {};
+    const productIds = new Set();
+    for (const key in cartData) {
+      if (cartData[key].quantity > 0) {
+        const pid = key.includes("::") ? key.split("::")[0] : key;
+        if (pid) productIds.add(pid);
+      }
+    }
+    if (user.wishlist) {
+      user.wishlist.forEach((w) => {
+        const pid = typeof w === "string" ? w : w.productId;
+        if (pid) productIds.add(pid.toString());
+      });
+    }
+
+    const productModel = mongoose.model('product');
+    const cartProducts = await productModel.find({ _id: { $in: Array.from(productIds) } }).lean();
+
+    res.json({ success: true, user, orders, cartProducts });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

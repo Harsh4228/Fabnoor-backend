@@ -27,7 +27,7 @@ const connectDB = async () => {
     await mongoose.connect(mongoUri);
   } catch (error) {
     console.error("MongoDB connection failed:", error.message);
-    process.exit(1);
+    console.warn("⚠️ Server is continuing to run, but database operations will fail until the connection is restored.");
   }
 };
 

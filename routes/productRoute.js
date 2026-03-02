@@ -5,6 +5,8 @@ import {
   listProducts,
   singleProduct,
   removeProduct,
+  getProductsByIds,
+  getProductMetadata,
 } from "../controllers/productController.js";
 
 import upload from "../middleware/multer.js";
@@ -47,6 +49,8 @@ productRouter.post(
  * =========================
  */
 productRouter.get("/list", listProducts);
+productRouter.get("/metadata", getProductMetadata);
+productRouter.post("/by-ids", getProductsByIds);
 productRouter.get("/:id", singleProduct);
 
 export default productRouter;

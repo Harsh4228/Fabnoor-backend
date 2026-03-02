@@ -1,4 +1,16 @@
 import userModel from "../models/userModel.js";
+import productModel from "../models/productModel.js";
+
+const getCartProducts = async (cartData) => {
+  const productIds = new Set();
+  for (const key in cartData) {
+    if (cartData[key].quantity > 0) {
+      const pid = key.includes("::") ? key.split("::")[0] : key;
+      if (pid) productIds.add(pid);
+    }
+  }
+  return await productModel.find({ _id: { $in: Array.from(productIds) } }).lean();
+};
 
 /**
  * =========================
@@ -45,10 +57,12 @@ export const addToCart = async (req, res) => {
 
     // Fetch new state
     const updatedUser = await userModel.findById(userId).select("cartData");
+    const cartProducts = await getCartProducts(updatedUser.cartData || {});
 
     res.json({
       success: true,
       cartData: updatedUser.cartData || {},
+      cartProducts,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -98,10 +112,12 @@ export const updateCart = async (req, res) => {
     await userModel.findByIdAndUpdate(userId, { cartData });
 
     const updatedUser = await userModel.findById(userId).select("cartData");
+    const cartProducts = await getCartProducts(updatedUser.cartData || {});
 
     res.json({
       success: true,
       cartData: updatedUser.cartData || {},
+      cartProducts,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -123,9 +139,13 @@ export const getUserCart = async (req, res) => {
       return res.status(401).json({ success: false, message: "User not found" });
     }
 
+    const cartData = user.cartData || {};
+    const cartProducts = await getCartProducts(cartData);
+
     res.json({
       success: true,
-      cartData: user.cartData || {},
+      cartData,
+      cartProducts,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -175,8 +195,13 @@ export const mergeCart = async (req, res) => {
     await userModel.findByIdAndUpdate(userId, { cartData: serverCart });
 
     const updatedUser = await userModel.findById(userId).select("cartData");
+    const cartProducts = await getCartProducts(updatedUser.cartData || {});
 
-    res.json({ success: true, cartData: updatedUser.cartData || {} });
+    res.json({
+      success: true,
+      cartData: updatedUser.cartData || {},
+      cartProducts,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

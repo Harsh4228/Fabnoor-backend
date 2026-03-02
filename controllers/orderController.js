@@ -481,12 +481,29 @@ const verifyRazorpay = async (req, res) => {
 ========================= */
 const allOrders = async (req, res) => {
   try {
-    const orders = await orderModel
-      .find({ status: { $ne: "Payment Pending" } })
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 0;
+    const statusFilter = req.query.status;
+
+    const query = { status: { $ne: "Payment Pending" } };
+    if (statusFilter && statusFilter !== "All") {
+      query.status = statusFilter;
+    }
+
+    const totalCount = await orderModel.countDocuments(query);
+
+    let ordersQuery = orderModel
+      .find(query)
       .populate("userId", "-password") // ✅ Exclude only password to securely give admin all profile data
       .sort({ createdAt: -1 });
 
-    res.json({ success: true, orders });
+    if (limit > 0) {
+      ordersQuery = ordersQuery.skip((page - 1) * limit).limit(limit);
+    }
+
+    const orders = await ordersQuery;
+
+    res.json({ success: true, orders, totalCount });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -497,11 +514,23 @@ const allOrders = async (req, res) => {
 ========================= */
 const userOrders = async (req, res) => {
   try {
-    const orders = await orderModel
-      .find({ userId: req.user._id, status: { $ne: "Payment Pending" } }) // ✅ FIX
+    const page = parseInt(req.body.page || req.query.page, 10) || 1;
+    const limit = parseInt(req.body.limit || req.query.limit, 10) || 0;
+
+    const query = { userId: req.user._id, status: { $ne: "Payment Pending" } }; // ✅ FIX
+    const totalCount = await orderModel.countDocuments(query);
+
+    let ordersQuery = orderModel
+      .find(query)
       .sort({ createdAt: -1 });
 
-    res.json({ success: true, orders });
+    if (limit > 0) {
+      ordersQuery = ordersQuery.skip((page - 1) * limit).limit(limit);
+    }
+
+    const orders = await ordersQuery;
+
+    res.json({ success: true, orders, totalCount });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

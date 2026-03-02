@@ -125,8 +125,78 @@ const addProduct = async (req, res) => {
  */
 const listProducts = async (req, res) => {
   try {
-    const products = await productModel.find({}).sort({ date: -1 });
-    res.json({ success: true, products });
+    const {
+      page = 1,
+      limit = 0,
+      category,
+      subCategory,
+      search,
+      bestseller,
+      sortType,
+    } = req.query;
+
+    const query = {};
+
+    if (category) {
+      const categories = Array.isArray(category) ? category : category.split(",");
+      query.category = { $in: categories };
+    }
+
+    if (subCategory) {
+      const subCategories = Array.isArray(subCategory) ? subCategory : subCategory.split(",");
+      query.subCategory = { $in: subCategories };
+    }
+
+    if (bestseller === "true") {
+      query.bestseller = true;
+    }
+
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+        { category: { $regex: search, $options: "i" } },
+        { subCategory: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    let pipeline = [];
+    if (Object.keys(query).length > 0) {
+      pipeline.push({ $match: query });
+    }
+
+    if (sortType === "low-high" || sortType === "high-low") {
+      pipeline.push({
+        $addFields: {
+          minPrice: { $min: "$variants.price" }
+        }
+      });
+      pipeline.push({
+        $sort: { minPrice: sortType === "low-high" ? 1 : -1 }
+      });
+    } else {
+      pipeline.push({ $sort: { date: -1 } });
+    }
+
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10);
+
+    const facet = {
+      metadata: [{ $count: "totalCount" }],
+      data: []
+    };
+
+    if (limitNum > 0) {
+      facet.data.push({ $skip: (pageNum - 1) * limitNum }, { $limit: limitNum });
+    }
+
+    pipeline.push({ $facet: facet });
+
+    const result = await productModel.aggregate(pipeline);
+    const products = result[0].data;
+    const totalCount = result[0].metadata[0]?.totalCount || 0;
+
+    res.json({ success: true, products, totalCount });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -143,6 +213,51 @@ const singleProduct = async (req, res) => {
     if (!product)
       return res.status(404).json({ success: false, message: "Not found" });
     res.json({ success: true, product });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * =========================
+ * GET PRODUCTS BY IDS
+ * =========================
+ */
+const getProductsByIds = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids)) {
+      return res.status(400).json({ success: false, message: "Array of ids required" });
+    }
+    const products = await productModel.find({ _id: { $in: ids } }).lean();
+    res.json({ success: true, products });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * =========================
+ * GET PRODUCT METADATA (Categories)
+ * =========================
+ */
+const getProductMetadata = async (req, res) => {
+  try {
+    const categories = await productModel.distinct("category");
+    const subCategoriesRaw = await productModel.aggregate([
+      { $group: { _id: { category: "$category", subCategory: "$subCategory" } } },
+      { $match: { "_id.subCategory": { $ne: null } } }
+    ]);
+
+    // Group subcategories by category
+    const subCategoriesMap = {};
+    subCategoriesRaw.forEach(item => {
+      const { category, subCategory } = item._id;
+      if (!subCategoriesMap[category]) subCategoriesMap[category] = [];
+      subCategoriesMap[category].push(subCategory);
+    });
+
+    res.json({ success: true, categories, subCategoriesMap });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -253,4 +368,6 @@ export {
   listProducts,
   singleProduct,
   removeProduct,
+  getProductsByIds,
+  getProductMetadata,
 };
