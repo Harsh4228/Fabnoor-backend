@@ -290,16 +290,16 @@ const requestResetOtp = async (req, res) => {
     user.resetOtpExpireAt = expireAt;
     await user.save();
 
-    // Await the email so we can detect failures and surface them
-    const emailSent = await sendResetOtpEmail(user.email, otp);
-
-    if (!emailSent) {
-      console.error(`[OTP] Email delivery failed for ${user.email}`);
-      // Still return success=true so we don't leak that the email address exists,
-      // but log it so Render logs show the failure clearly.
-    }
-
+    // Respond instantly — email is sent in the background
     res.json({ success: true, message: "OTP sent to your email" });
+
+    // Fire-and-forget — don't block the response
+    sendResetOtpEmail(user.email, otp).then((sent) => {
+      if (!sent) console.error(`[OTP] Email delivery failed for ${user.email}`);
+    }).catch((err) => {
+      console.error("[OTP] Unexpected email error:", err?.message ?? err);
+    });
+
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
