@@ -290,10 +290,14 @@ const requestResetOtp = async (req, res) => {
     user.resetOtpExpireAt = expireAt;
     await user.save();
 
-    // Fire and forget the email to prevent frontend timeout
-    sendResetOtpEmail(user.email, otp).catch(err => {
-      console.error("Background sendResetOtpEmail error:", err);
-    });
+    // Await the email so we can detect failures and surface them
+    const emailSent = await sendResetOtpEmail(user.email, otp);
+
+    if (!emailSent) {
+      console.error(`[OTP] Email delivery failed for ${user.email}`);
+      // Still return success=true so we don't leak that the email address exists,
+      // but log it so Render logs show the failure clearly.
+    }
 
     res.json({ success: true, message: "OTP sent to your email" });
   } catch (error) {

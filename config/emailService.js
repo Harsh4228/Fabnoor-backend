@@ -1,9 +1,11 @@
 import nodemailer from "nodemailer";
 
 /**
- * Creates a fresh transporter on every call so that:
- *  1. A changed Gmail App Password in .env is picked up without restart.
- *  2. Pool connections don't carry stale auth credentials.
+ * Creates a fresh transporter on every call.
+ * - Reads EMAIL_USER / EMAIL_PASS fresh from process.env each time,
+ *   so an updated App Password takes effect without restarting the server.
+ * - Uses `service: 'gmail'` which handles host/port/TLS automatically
+ *   and is the most reliable option for Gmail App Passwords.
  */
 const createTransporter = () => {
   const user = process.env.EMAIL_USER;
@@ -15,16 +17,13 @@ const createTransporter = () => {
   }
 
   return nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true, // SSL — more reliable than STARTTLS for Gmail App Passwords
+    service: "gmail",
     auth: { user, pass },
-    tls: { rejectUnauthorized: false },
   });
 };
 
 /**
- * Internal helper: sends a mail and returns true/false.
+ * Internal helper — creates a transporter, sends, returns true/false.
  */
 const sendMail = async (mailOptions) => {
   const transporter = createTransporter();
@@ -36,7 +35,6 @@ const sendMail = async (mailOptions) => {
     console.log("✅ Email sent to:", accepted.join(", ") || mailOptions.to);
     return true;
   } catch (err) {
-    // Log the full error so it's visible in Render logs
     console.error("❌ Email send error:", err?.message ?? err);
     if (err?.responseCode) console.error("   SMTP response code:", err.responseCode);
     if (err?.response) console.error("   SMTP response msg :", err.response);
@@ -71,7 +69,7 @@ export const sendInvoiceEmail = async (toEmail, pdfBuffer) => {
     from: `"Fabnoor" <${process.env.EMAIL_USER}>`,
     to: toEmail,
     subject: "📦 Your Order Invoice - Delivered",
-    text: `Hi there,\n\nWe're happy to let you know that your order has been successfully delivered! 🎉\n\nPlease find your invoice attached with this email for your records.\n\nThank you for shopping with Fabnoor.\n\nBest regards,\nTeam Fabnoor`,
+    text: `Hi there,\n\nYour order has been delivered! 🎉\n\nPlease find your invoice attached.\n\nThank you for shopping with Fabnoor.\n\nBest regards,\nTeam Fabnoor`,
     attachments: [
       {
         filename: "invoice.pdf",
@@ -86,7 +84,7 @@ export const sendInvoiceEmail = async (toEmail, pdfBuffer) => {
 // Reset Password OTP Email
 // ─────────────────────────────────────────────────────────────────────────────
 export const sendResetOtpEmail = async (toEmail, otp) => {
-  console.log(`📧 Sending OTP [${otp}] to: ${toEmail}`);
+  console.log(`📧 Attempting OTP send to: ${toEmail} | OTP: ${otp}`);
 
   const result = await sendMail({
     from: `"Fabnoor" <${process.env.EMAIL_USER}>`,
@@ -109,11 +107,11 @@ export const sendResetOtpEmail = async (toEmail, otp) => {
         </div>
       </div>
     `,
-    text: `Your Fabnoor password reset OTP is: ${otp}\n\nThis OTP is valid for 10 minutes. Do not share it with anyone.`,
+    text: `Your Fabnoor password reset OTP is: ${otp}\n\nValid for 10 minutes. Do not share it with anyone.`,
   });
 
   if (!result) {
-    console.error("❌ OTP email delivery FAILED for:", toEmail);
+    console.error("❌ OTP email FAILED for:", toEmail);
   }
   return result;
 };
