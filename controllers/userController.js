@@ -290,14 +290,24 @@ const requestResetOtp = async (req, res) => {
     user.resetOtpExpireAt = expireAt;
     await user.save();
 
-    // Respond instantly — email is sent in the background
+    // ✅ Always log OTP visibly in server logs — useful if email fails
+    console.log("╔══════════════════════════════════╗");
+    console.log(`║  OTP for ${user.email}`);
+    console.log(`║  CODE: ${otp}  (10 min)`);
+    console.log("╚══════════════════════════════════╝");
+
+    // Respond instantly — email sends in background
     res.json({ success: true, message: "OTP sent to your email" });
 
-    // Fire-and-forget — don't block the response
+    // Fire-and-forget
     sendResetOtpEmail(user.email, otp).then((sent) => {
-      if (!sent) console.error(`[OTP] Email delivery failed for ${user.email}`);
+      if (sent) {
+        console.log(`[OTP] ✅ Email delivered to ${user.email}`);
+      } else {
+        console.error(`[OTP] ❌ Email FAILED for ${user.email} — check EMAIL_USER/EMAIL_PASS on Render`);
+      }
     }).catch((err) => {
-      console.error("[OTP] Unexpected email error:", err?.message ?? err);
+      console.error("[OTP] Error:", err?.message ?? err);
     });
 
   } catch (error) {
