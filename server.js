@@ -69,15 +69,29 @@ app.get("/", (req, res) => {
 
 const server = app.listen(port, () => {
   console.log("Server started on", port);
-  // print address info for debug
   try {
     console.log('address:', server.address());
   } catch (err) {
     console.log('address info not available:', err && err.message);
   }
 
-  // heartbeat to keep process in foreground and confirm it's alive
-  setInterval(() => {
-    console.log('heartbeat - server alive at', new Date().toISOString());
-  }, 10000);
+  // ✅ Keep-alive self-ping to prevent Render free-tier from sleeping.
+  // Render automatically sets RENDER_EXTERNAL_URL for deployed services.
+  const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`;
+  const PING_INTERVAL_MS = 14 * 60 * 1000; // 14 minutes (Render sleeps after 15)
+
+  setInterval(async () => {
+    try {
+      const https = await import('https');
+      const http = await import('http');
+      const lib = SELF_URL.startsWith('https') ? https.default : http.default;
+      lib.get(SELF_URL, (res) => {
+        console.log(`[keep-alive] Pinged ${SELF_URL} → ${res.statusCode}`);
+      }).on('error', (err) => {
+        console.warn('[keep-alive] Ping error:', err.message);
+      });
+    } catch (err) {
+      console.warn('[keep-alive] Import error:', err.message);
+    }
+  }, PING_INTERVAL_MS);
 });
