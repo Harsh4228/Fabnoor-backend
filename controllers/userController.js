@@ -3,7 +3,6 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import userModel from "../models/userModel.js";
-import { sendResetOtpEmail } from "../config/emailService.js";
 
 /* ================= TOKEN ================= */
 const createToken = (user) => {
@@ -282,32 +281,25 @@ const requestResetOtp = async (req, res) => {
       return res.json({ success: false, message: "User not found" });
     }
 
-    // Generate a 6-digit number string
+    // Generate a 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expireAt = Date.now() + 10 * 60 * 1000; // 10 minutes from now
+    const expireAt = Date.now() + 10 * 60 * 1000; // 10 minutes
 
     user.resetOtp = otp;
     user.resetOtpExpireAt = expireAt;
     await user.save();
 
-    // ✅ Always log OTP visibly in server logs — useful if email fails
     console.log("╔══════════════════════════════════╗");
     console.log(`║  OTP for ${user.email}`);
     console.log(`║  CODE: ${otp}  (10 min)`);
     console.log("╚══════════════════════════════════╝");
 
-    // Respond instantly — email sends in background
-    res.json({ success: true, message: "OTP sent to your email" });
-
-    // Fire-and-forget
-    sendResetOtpEmail(user.email, otp).then((sent) => {
-      if (sent) {
-        console.log(`[OTP] ✅ Email delivered to ${user.email}`);
-      } else {
-        console.error(`[OTP] ❌ Email FAILED for ${user.email} — check EMAIL_USER/EMAIL_PASS on Render`);
-      }
-    }).catch((err) => {
-      console.error("[OTP] Error:", err?.message ?? err);
+    // Return OTP and user's mobile so the frontend can open WhatsApp
+    return res.json({
+      success: true,
+      message: "OTP generated",
+      otp,                          // used by frontend to build WhatsApp message
+      mobile: user.mobile || null,  // user's registered phone number
     });
 
   } catch (error) {
