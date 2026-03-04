@@ -607,10 +607,91 @@ const updatePaymentStatus = async (req, res) => {
 };
 
 
+/* =========================
+   PLACE ORDER (WHATSAPP)
+========================= */
+const placeOrderWhatsApp = async (req, res) => {
+  try {
+    const { items, amount, address } = req.body;
+
+    if (process.env.SKIP_DB === "true") {
+      return res.status(503).json({
+        success: false,
+        message: "Server running in limited debug mode; order placement is disabled.",
+      });
+    }
+
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ success: false, message: "User not authenticated" });
+    }
+
+    // ✅ ENFORCE PRICE VALIDATION
+    try {
+      await validateOrderPrices(items, amount);
+    } catch (validationErr) {
+      return res.status(400).json({ success: false, message: validationErr.message });
+    }
+
+    // Prevent accidental duplicate orders in quick succession
+    const recent = await orderModel.findOne({
+      userId: req.user._id,
+      amount,
+      createdAt: { $gte: new Date(Date.now() - 30 * 1000) },
+    });
+    if (recent) {
+      return res.status(409).json({ success: false, message: "Duplicate order detected." });
+    }
+
+    const order = await orderModel.create({
+      userId: req.user._id,
+      items,
+      amount,
+      address,
+      paymentMethod: "WhatsApp",
+      payment: false,
+      status: "Order Placed",
+    });
+
+    // ✅ Clear cart and save address if user has none
+    const updateData = { cartData: {} };
+    const isAddressEmpty = !req.user.address || !req.user.address.street || req.user.address.street.trim() === "";
+    if (isAddressEmpty && address) {
+      updateData.address = {
+        street: address.addressLine || address.street || "",
+        city: address.city || "",
+        state: address.state || "",
+        zipcode: address.pincode || address.zipcode || "",
+        country: address.country || "",
+      };
+      if (!req.user.mobile && address.phone) {
+        updateData.mobile = address.phone;
+      }
+    }
+    await userModel.findByIdAndUpdate(req.user._id, updateData, { new: true });
+
+    // ✅ Deduct stock
+    try {
+      await deductStock(items);
+    } catch (err) {
+      console.error("[stock] deductStock error (WhatsApp):", err.message);
+    }
+
+    res.json({
+      success: true,
+      message: "WhatsApp order registered",
+      order,
+    });
+  } catch (error) {
+    console.error("WhatsApp order error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 
 
 export {
   placeOrder,
+  placeOrderWhatsApp,
   placeOrderRazorpay,
   verifyRazorpay,
   allOrders,

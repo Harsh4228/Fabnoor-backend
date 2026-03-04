@@ -1,6 +1,7 @@
 import express from "express";
 import {
   placeOrder,
+  placeOrderWhatsApp,
   placeOrderRazorpay,
   allOrders,
   userOrders,
@@ -27,6 +28,7 @@ orderRouter.get("/invoice/:orderId", authUser, adminAuth, getInvoice);
 
 // ❌ adminAuth REMOVED (users can place orders)
 orderRouter.post("/place", authUser, placeOrder);
+orderRouter.post("/whatsapp", authUser, placeOrderWhatsApp);
 orderRouter.post("/razorpay", authUser, placeOrderRazorpay);
 orderRouter.post("/userorders", authUser, userOrders);
 
