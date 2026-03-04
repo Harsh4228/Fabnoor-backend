@@ -271,12 +271,12 @@ const deleteUser = async (req, res) => {
 /* ================= REQUEST RESET OTP ================= */
 const requestResetOtp = async (req, res) => {
   try {
-    const { email } = req.body;
-    if (!email) {
-      return res.json({ success: false, message: "Email is required" });
+    const { mobile } = req.body;
+    if (!mobile) {
+      return res.json({ success: false, message: "Mobile number is required" });
     }
 
-    const user = await userModel.findOne({ email });
+    const user = await userModel.findOne({ mobile });
     if (!user) {
       return res.json({ success: false, message: "User not found" });
     }
@@ -290,7 +290,7 @@ const requestResetOtp = async (req, res) => {
     await user.save();
 
     console.log("╔══════════════════════════════════╗");
-    console.log(`║  OTP for ${user.email}`);
+    console.log(`║  OTP for ${user.mobile}`);
     console.log(`║  CODE: ${otp}  (10 min)`);
     console.log("╚══════════════════════════════════╝");
 
@@ -310,9 +310,9 @@ const requestResetOtp = async (req, res) => {
 /* ================= RESET PASSWORD ================= */
 const resetPassword = async (req, res) => {
   try {
-    const { email, otp, newPassword } = req.body;
+    const { mobile, otp, newPassword } = req.body;
 
-    if (!email || !otp || !newPassword) {
+    if (!mobile || !otp || !newPassword) {
       return res.json({ success: false, message: "Missing required fields" });
     }
 
@@ -320,7 +320,7 @@ const resetPassword = async (req, res) => {
       return res.json({ success: false, message: "Password must be at least 8 characters" });
     }
 
-    const user = await userModel.findOne({ email });
+    const user = await userModel.findOne({ mobile });
     if (!user) {
       return res.json({ success: false, message: "User not found" });
     }
