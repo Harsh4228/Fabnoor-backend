@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import userModel from "../models/userModel.js";
+import { sendWhatsAppMessage } from "../config/whatsappService.js";
 
 /* ================= TOKEN ================= */
 const createToken = (user) => {
@@ -294,13 +295,19 @@ const requestResetOtp = async (req, res) => {
     console.log(`║  CODE: ${otp}  (10 min)`);
     console.log("╚══════════════════════════════════╝");
 
-    // Return OTP and user's mobile so the frontend can open WhatsApp
-    return res.json({
+    // Send immediate response
+    res.json({
       success: true,
-      message: "OTP generated",
-      otp,                          // used by frontend to build WhatsApp message
-      mobile: user.mobile || null,  // user's registered phone number
+      message: "OTP sent successfully to your WhatsApp number",
     });
+
+    // Fire-and-forget background job: send the OTP directly to the user's WhatsApp
+    if (user.mobile) {
+      const waMsg = `🔐 *Fabnoor Password Reset OTP*\n\nYour OTP is: *${otp}*\n\n⏰ Valid for 10 minutes.\nDo not share this with anyone.`;
+      sendWhatsAppMessage(user.mobile, waMsg).then(sent => {
+        if (!sent) console.log("⚠️ WhatsApp API not configured. OTP was printed to console.");
+      });
+    }
 
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
