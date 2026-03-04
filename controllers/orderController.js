@@ -6,6 +6,7 @@ import crypto from "crypto";
 
 import { sendOrderEmail, sendInvoiceEmail } from "../config/emailService.js";
 import { generateInvoice } from "../config/invoiceGenerator.js";
+import { generateOrderSlip } from "../config/orderSlipGenerator.js";
 
 /* =========================
    DEDUCT STOCK ON ORDER
@@ -689,6 +690,33 @@ const placeOrderWhatsApp = async (req, res) => {
 
 
 
+/* =========================
+   USER: DOWNLOAD WHATSAPP ORDER SLIP
+========================= */
+const getWhatsAppSlip = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const order = await orderModel.findById(orderId);
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+
+    // Only allow the order owner to download
+    if (order.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
+    const user = await userModel.findById(order.userId);
+    const pdfBuffer = await generateOrderSlip(order, user);
+
+    const filename = `order-slip-${order.orderNumber || order._id}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.send(pdfBuffer);
+  } catch (error) {
+    console.error("Get order slip error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export {
   placeOrder,
   placeOrderWhatsApp,
@@ -699,6 +727,7 @@ export {
   updateStatus,
   updatePaymentStatus,
   getInvoice,
+  getWhatsAppSlip,
 };
 
 /* =========================

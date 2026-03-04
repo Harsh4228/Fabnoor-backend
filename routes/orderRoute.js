@@ -9,6 +9,7 @@ import {
   updatePaymentStatus,
   getInvoice,
   verifyRazorpay,
+  getWhatsAppSlip,
 } from "../controllers/orderController.js";
 
 import authUser from "../middleware/auth.js";
@@ -29,6 +30,7 @@ orderRouter.get("/invoice/:orderId", authUser, adminAuth, getInvoice);
 // ❌ adminAuth REMOVED (users can place orders)
 orderRouter.post("/place", authUser, placeOrder);
 orderRouter.post("/whatsapp", authUser, placeOrderWhatsApp);
+orderRouter.get("/slip/:orderId", authUser, getWhatsAppSlip);
 orderRouter.post("/razorpay", authUser, placeOrderRazorpay);
 orderRouter.post("/userorders", authUser, userOrders);
 
