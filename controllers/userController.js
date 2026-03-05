@@ -298,6 +298,37 @@ const makeAdmin = async (req, res) => {
   }
 };
 
+/* ================= REMOVE USER ADMIN (ADMIN) ================= */
+const removeAdmin = async (req, res) => {
+  try {
+    const { id } = req.body;
+
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: "Not authorized. Only admins can modify roles." });
+    }
+
+    const user = await userModel.findById(id);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // Optional: Protect the super/main admin from being removed
+    // if (user.email === 'Fabnoor.nikunj@gmail.com') return res.json({ success: false, message: "Cannot remove super admin" });
+
+    if (user.role === 'user') {
+      return res.json({ success: false, message: "User is already a regular User" });
+    }
+
+    user.role = 'user';
+    await user.save();
+
+    res.json({ success: true, message: `${user.name}'s Admin privileges have been revoked` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 /* ================= REQUEST RESET OTP ================= */
 const requestResetOtp = async (req, res) => {
   try {
@@ -385,4 +416,4 @@ const resetPassword = async (req, res) => {
   }
 };
 
-export { loginUser, registerUser, adminLogin, getProfile, updateProfile, getAllUsers, getUserFullDetails, deleteUser, makeAdmin, requestResetOtp, resetPassword };
+export { loginUser, registerUser, adminLogin, getProfile, updateProfile, getAllUsers, getUserFullDetails, deleteUser, makeAdmin, removeAdmin, requestResetOtp, resetPassword };
