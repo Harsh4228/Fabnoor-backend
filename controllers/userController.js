@@ -269,6 +269,35 @@ const deleteUser = async (req, res) => {
   }
 };
 
+/* ================= MAKE USER ADMIN (ADMIN) ================= */
+const makeAdmin = async (req, res) => {
+  try {
+    const { id } = req.body;
+
+    // Check if the user trying to perform this action is an admin (redundant but safe)
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: "Not authorized. Only admins can assign roles." });
+    }
+
+    const user = await userModel.findById(id);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    if (user.role === 'admin') {
+      return res.json({ success: false, message: "User is already an Admin" });
+    }
+
+    user.role = 'admin';
+    await user.save();
+
+    res.json({ success: true, message: `${user.name} has been promoted to Admin successfully` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 /* ================= REQUEST RESET OTP ================= */
 const requestResetOtp = async (req, res) => {
   try {
@@ -356,4 +385,4 @@ const resetPassword = async (req, res) => {
   }
 };
 
-export { loginUser, registerUser, adminLogin, getProfile, updateProfile, getAllUsers, getUserFullDetails, deleteUser, requestResetOtp, resetPassword };
+export { loginUser, registerUser, adminLogin, getProfile, updateProfile, getAllUsers, getUserFullDetails, deleteUser, makeAdmin, requestResetOtp, resetPassword };
