@@ -307,6 +307,10 @@ const removeAdmin = async (req, res) => {
       return res.status(403).json({ success: false, message: "Not authorized. Only admins can modify roles." });
     }
 
+    if (req.user._id.toString() === id) {
+      return res.status(403).json({ success: false, message: "You cannot revoke your own Admin privileges." });
+    }
+
     const user = await userModel.findById(id);
 
     if (!user) {
@@ -314,7 +318,9 @@ const removeAdmin = async (req, res) => {
     }
 
     // Optional: Protect the super/main admin from being removed
-    // if (user.email === 'Fabnoor.nikunj@gmail.com') return res.json({ success: false, message: "Cannot remove super admin" });
+    if (user.email === 'Fabnoor.nikunj@gmail.com') {
+      return res.json({ success: false, message: "Cannot remove the Principal Super Admin" });
+    }
 
     if (user.role === 'user') {
       return res.json({ success: false, message: "User is already a regular User" });
