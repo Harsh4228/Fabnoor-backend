@@ -100,6 +100,80 @@ const deductStock = async (items) => {
 };
 
 /* =========================
+   RESTORE STOCK ON CANCEL
+========================= */
+const restoreStock = async (items) => {
+  if (!Array.isArray(items) || !items.length) return;
+
+  for (const item of items) {
+    try {
+      const pid = item.productId?.toString();
+      const qty = Number(item.quantity || 1);
+      const code = (item.code || "").trim();
+      const color = (item.color || "").trim().toLowerCase();
+      const fabric = (item.fabric || item.type || "").trim().toLowerCase();
+
+      if (!pid) {
+        console.warn("[stock] skipping item - no productId");
+        continue;
+      }
+
+      // Use .lean() to get RAW MongoDB document
+      const product = await productModel.findById(pid).lean();
+
+      if (!product || !product.variants?.length) {
+        console.warn(`[stock] product not found or no variants: ${pid}`);
+        continue;
+      }
+
+      // Find variant index with priority fallbacks (same logic as deductStock)
+      let idx = -1;
+      if (code) {
+        idx = product.variants.findIndex(
+          (v) => (v.code || "").trim() === code
+        );
+      }
+      if (idx === -1 && (color || fabric)) {
+        idx = product.variants.findIndex((v) => {
+          const vColor = (v.color || "").trim().toLowerCase();
+          const vFabric = (v.fabric || "").trim().toLowerCase();
+          return vColor === color && vFabric === fabric;
+        });
+      }
+      if (idx === -1 && (color || fabric)) {
+        idx = product.variants.findIndex((v) => {
+          const vColor = (v.color || "").trim().toLowerCase();
+          const vType = (v.type || "").trim().toLowerCase();
+          return vColor === color && vType === fabric;
+        });
+      }
+      if (idx === -1 && color) {
+        idx = product.variants.findIndex(
+          (v) => (v.color || "").trim().toLowerCase() === color
+        );
+      }
+      if (idx === -1) idx = 0;
+
+      const currentStock = Number(product.variants[idx].stock ?? 0);
+      const newStock = currentStock + qty;
+
+      const updateRes = await productModel.updateOne(
+        { _id: pid },
+        { $set: { [`variants.${idx}.stock`]: newStock } }
+      );
+
+      if (updateRes.modifiedCount > 0) {
+        console.log(
+          `[stock] ♻️ product=${pid} variant[${idx}] (${product.variants[idx].color}) stock restored: ${currentStock} → ${newStock} (+${qty})`
+        );
+      }
+    } catch (err) {
+      console.error(`[stock] ❌ restore error for product ${item?.productId}:`, err.message);
+    }
+  }
+};
+
+/* =========================
    VALIDATE ORDER PRICES
 ========================= */
 const validateOrderPrices = async (items, clientTotal, deliveryFee = 0) => {
@@ -560,8 +634,26 @@ const updateStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: "Order not found" });
     }
 
+    const oldStatus = order.status;
     order.status = status;
     await order.save();
+
+    // ✅ AUTOMATIC STOCK MANAGEMENT
+    if (oldStatus !== "Cancelled" && status === "Cancelled") {
+      // 1. Moving TO Cancelled -> Restore Stock
+      try {
+        await restoreStock(order.items);
+      } catch (err) {
+        console.error("[stock] restoreStock error during cancel:", err.message);
+      }
+    } else if (oldStatus === "Cancelled" && status !== "Cancelled") {
+      // 2. Moving OUT OF Cancelled -> Deduct Stock again
+      try {
+        await deductStock(order.items);
+      } catch (err) {
+        console.error("[stock] deductStock error during un-cancel:", err.message);
+      }
+    }
 
     // on delivery, generate and send invoice (background)
     if (status === "Delivered") {
