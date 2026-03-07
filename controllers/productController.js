@@ -13,6 +13,10 @@ const safeKey = (val) =>
 const addProduct = async (req, res) => {
   try {
     const {
+      name,
+      description,
+      category,
+      subCategory,
       bestseller,
       variants,
       discount,
@@ -283,6 +287,11 @@ const removeProduct = async (req, res) => {
 const editProduct = async (req, res) => {
   try {
     const {
+      id,
+      name,
+      description,
+      category,
+      subCategory,
       bestseller,
       variants,
       discount,
@@ -292,7 +301,16 @@ const editProduct = async (req, res) => {
     if (!product)
       return res.status(404).json({ success: false, message: "Not found" });
 
-    const parsedVariants = JSON.parse(variants);
+    /* PARSE VARIANTS */
+    let parsedVariants;
+    try {
+      parsedVariants = JSON.parse(variants);
+    } catch {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid variants format",
+      });
+    }
 
     const imageMap = {};
     (req.files || []).forEach((file) => {
@@ -302,7 +320,7 @@ const editProduct = async (req, res) => {
 
     const updatedVariants = await Promise.all(
       parsedVariants.map(async (variant) => {
-        let { color, fabric, sizes, existingImages, price, stock = [], code } = variant;
+        let { color, fabric, sizes, existingImages, price, stock = 0, code } = variant;
 
         // for legacy products the code may be missing; auto-generate a fallback
         if (!code || typeof code !== "string" || !code.trim()) {
@@ -341,10 +359,7 @@ const editProduct = async (req, res) => {
     product.description = description ?? product.description;
     product.category = category ?? product.category;
     product.subCategory = subCategory ?? product.subCategory;
-    product.bestseller =
-      bestseller === "true" || bestseller === true
-        ? true
-        : product.bestseller;
+    product.bestseller = bestseller === "true" || bestseller === true;
     product.variants = updatedVariants;
     product.discount = discount !== undefined ? Number(discount) : product.discount;
 
