@@ -1,4 +1,5 @@
 import { v2 as cloudinary } from "cloudinary";
+import userModel from "../models/userModel.js";
 import productModel from "../models/productModel.js";
 
 /* ================= UTILS ================= */
@@ -272,7 +273,15 @@ const getProductMetadata = async (req, res) => {
  */
 const removeProduct = async (req, res) => {
   try {
-    await productModel.findByIdAndDelete(req.body.id);
+    const { id } = req.body;
+    await productModel.findByIdAndDelete(id);
+
+    // Cleanup wishlist for all users
+    await userModel.updateMany(
+      {},
+      { $pull: { wishlist: { productId: id } } }
+    );
+
     res.json({ success: true, message: "Product removed" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

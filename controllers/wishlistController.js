@@ -16,7 +16,7 @@ export const addToWishlist = async (req, res) => {
     const alreadyExists = user.wishlist.some(
       (item) =>
         item.productId.toString() === productId &&
-        item.color === color 
+        item.color === color
     );
 
     if (alreadyExists) {
@@ -55,7 +55,7 @@ export const removeFromWishlist = async (req, res) => {
       (item) =>
         !(
           item.productId.toString() === productId &&
-          item.color === color 
+          item.color === color
         )
     );
 
@@ -84,9 +84,12 @@ export const getWishlist = async (req, res) => {
       .findById(userId)
       .populate("wishlist.productId");
 
+    // Filter out items where productId is null (deleted product)
+    const filteredWishlist = user.wishlist.filter(item => item.productId !== null);
+
     res.status(200).json({
       success: true,
-      wishlist: user.wishlist,
+      wishlist: filteredWishlist,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
