@@ -57,11 +57,22 @@ export const addToCart = async (req, res) => {
 
     // Fetch new state
     const updatedUser = await userModel.findById(userId).select("cartData");
-    const cartProducts = await getCartProducts(updatedUser.cartData || {});
+    const rawCartData = updatedUser.cartData || {};
+    const cartProducts = await getCartProducts(rawCartData);
+
+    // Filter cartData to remove orphaned items
+    const validProductIds = new Set(cartProducts.map(p => p._id.toString()));
+    const cartData = {};
+    for (const key in rawCartData) {
+      const pid = key.includes("::") ? key.split("::")[0] : key;
+      if (validProductIds.has(pid)) {
+        cartData[key] = rawCartData[key];
+      }
+    }
 
     res.json({
       success: true,
-      cartData: updatedUser.cartData || {},
+      cartData,
       cartProducts,
     });
   } catch (error) {
@@ -112,11 +123,22 @@ export const updateCart = async (req, res) => {
     await userModel.findByIdAndUpdate(userId, { cartData });
 
     const updatedUser = await userModel.findById(userId).select("cartData");
-    const cartProducts = await getCartProducts(updatedUser.cartData || {});
+    const rawCartData = updatedUser.cartData || {};
+    const cartProducts = await getCartProducts(rawCartData);
+
+    // Filter cartData to remove orphaned items
+    const validProductIds = new Set(cartProducts.map(p => p._id.toString()));
+    const cartData = {};
+    for (const key in rawCartData) {
+      const pid = key.includes("::") ? key.split("::")[0] : key;
+      if (validProductIds.has(pid)) {
+        cartData[key] = rawCartData[key];
+      }
+    }
 
     res.json({
       success: true,
-      cartData: updatedUser.cartData || {},
+      cartData,
       cartProducts,
     });
   } catch (error) {
@@ -139,8 +161,18 @@ export const getUserCart = async (req, res) => {
       return res.status(401).json({ success: false, message: "User not found" });
     }
 
-    const cartData = user.cartData || {};
-    const cartProducts = await getCartProducts(cartData);
+    const rawCartData = user.cartData || {};
+    const cartProducts = await getCartProducts(rawCartData);
+
+    // Filter cartData to remove orphaned items (where product no longer exists)
+    const validProductIds = new Set(cartProducts.map(p => p._id.toString()));
+    const cartData = {};
+    for (const key in rawCartData) {
+      const pid = key.includes("::") ? key.split("::")[0] : key;
+      if (validProductIds.has(pid)) {
+        cartData[key] = rawCartData[key];
+      }
+    }
 
     res.json({
       success: true,
@@ -195,11 +227,22 @@ export const mergeCart = async (req, res) => {
     await userModel.findByIdAndUpdate(userId, { cartData: serverCart });
 
     const updatedUser = await userModel.findById(userId).select("cartData");
-    const cartProducts = await getCartProducts(updatedUser.cartData || {});
+    const rawCartData = updatedUser.cartData || {};
+    const cartProducts = await getCartProducts(rawCartData);
+
+    // Filter cartData to remove orphaned items
+    const validProductIds = new Set(cartProducts.map(p => p._id.toString()));
+    const cartData = {};
+    for (const key in rawCartData) {
+      const pid = key.includes("::") ? key.split("::")[0] : key;
+      if (validProductIds.has(pid)) {
+        cartData[key] = rawCartData[key];
+      }
+    }
 
     res.json({
       success: true,
-      cartData: updatedUser.cartData || {},
+      cartData,
       cartProducts,
     });
   } catch (error) {
