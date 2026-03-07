@@ -62,17 +62,17 @@ export const addToCart = async (req, res) => {
 
     // Filter cartData to remove orphaned items
     const validProductIds = new Set(cartProducts.map(p => p._id.toString()));
-    const cartData = {};
+    const filteredCartData = {};
     for (const key in rawCartData) {
       const pid = key.includes("::") ? key.split("::")[0] : key;
       if (validProductIds.has(pid)) {
-        cartData[key] = rawCartData[key];
+        filteredCartData[key] = rawCartData[key];
       }
     }
 
     res.json({
       success: true,
-      cartData,
+      cartData: filteredCartData,
       cartProducts,
     });
   } catch (error) {
@@ -128,17 +128,17 @@ export const updateCart = async (req, res) => {
 
     // Filter cartData to remove orphaned items
     const validProductIds = new Set(cartProducts.map(p => p._id.toString()));
-    const cartData = {};
+    const filteredCartData = {};
     for (const key in rawCartData) {
       const pid = key.includes("::") ? key.split("::")[0] : key;
       if (validProductIds.has(pid)) {
-        cartData[key] = rawCartData[key];
+        filteredCartData[key] = rawCartData[key];
       }
     }
 
     res.json({
       success: true,
-      cartData,
+      cartData: filteredCartData,
       cartProducts,
     });
   } catch (error) {
@@ -166,17 +166,17 @@ export const getUserCart = async (req, res) => {
 
     // Filter cartData to remove orphaned items (where product no longer exists)
     const validProductIds = new Set(cartProducts.map(p => p._id.toString()));
-    const cartData = {};
+    const filteredCartData = {};
     for (const key in rawCartData) {
       const pid = key.includes("::") ? key.split("::")[0] : key;
       if (validProductIds.has(pid)) {
-        cartData[key] = rawCartData[key];
+        filteredCartData[key] = rawCartData[key];
       }
     }
 
     res.json({
       success: true,
-      cartData,
+      cartData: filteredCartData,
       cartProducts,
     });
   } catch (error) {
@@ -232,17 +232,17 @@ export const mergeCart = async (req, res) => {
 
     // Filter cartData to remove orphaned items
     const validProductIds = new Set(cartProducts.map(p => p._id.toString()));
-    const cartData = {};
+    const filteredCartData = {};
     for (const key in rawCartData) {
       const pid = key.includes("::") ? key.split("::")[0] : key;
       if (validProductIds.has(pid)) {
-        cartData[key] = rawCartData[key];
+        filteredCartData[key] = rawCartData[key];
       }
     }
 
     res.json({
       success: true,
-      cartData,
+      cartData: filteredCartData,
       cartProducts,
     });
   } catch (error) {
