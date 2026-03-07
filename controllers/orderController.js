@@ -1,6 +1,7 @@
 import orderModel from "../models/orderModel.js";
 import userModel from "../models/userModel.js";
 import productModel from "../models/productModel.js";
+import globalDiscountModel from "../models/globalDiscountModel.js";
 import Razorpay from "razorpay";
 import crypto from "crypto";
 
@@ -183,6 +184,11 @@ const validateOrderPrices = async (items, clientTotal, deliveryFee = 0) => {
 
   let calculatedTotal = 0;
 
+  // Fetch Global Discount
+  const globalDiscountDoc = await globalDiscountModel.findOne();
+  const globalDiscountActive = globalDiscountDoc?.isActive;
+  const globalDiscountPercentage = globalDiscountDoc?.discountPercentage || 0;
+
   for (const item of items) {
     const pid = item.productId?.toString();
     const qty = Number(item.quantity || 1);
@@ -225,10 +231,15 @@ const validateOrderPrices = async (items, clientTotal, deliveryFee = 0) => {
     const pieces = Math.max(Number(matchedVariant?.sizes?.length || 1), 1);
     const packPrice = perPiecePrice * pieces;
 
-    calculatedTotal += packPrice * qty;
+    // Apply Discount Logic: Global overrides Product-specific
+    const discount = globalDiscountActive ? globalDiscountPercentage : (product.discount || 0);
+    const discountedPackPrice = packPrice * (1 - discount / 100);
+
+    calculatedTotal += discountedPackPrice * qty;
   }
 
-  const expectedTotal = calculatedTotal + deliveryFee;
+  // Round to handle floating point precision
+  const expectedTotal = Math.round(calculatedTotal + deliveryFee);
 
   if (expectedTotal !== clientTotal) {
     throw new Error(`Price mismatch. The product prices have been updated. Expected: ₹${expectedTotal}, Received: ₹${clientTotal}. Please refresh your cart.`);

@@ -13,12 +13,9 @@ const safeKey = (val) =>
 const addProduct = async (req, res) => {
   try {
     const {
-      name,
-      description,
-      category,
-      subCategory,
       bestseller,
       variants,
+      discount,
     } = req.body;
 
     if (!name || !description || !category || !subCategory || !variants) {
@@ -102,6 +99,7 @@ const addProduct = async (req, res) => {
       subCategory,
       variants: finalVariants,
       bestseller: bestseller === "true" || bestseller === true,
+      discount: Number(discount) || 0,
       date: Date.now(),
     });
 
@@ -285,13 +283,9 @@ const removeProduct = async (req, res) => {
 const editProduct = async (req, res) => {
   try {
     const {
-      id,
-      name,
-      description,
-      category,
-      subCategory,
       bestseller,
       variants,
+      discount,
     } = req.body;
 
     const product = await productModel.findById(id);
@@ -352,6 +346,7 @@ const editProduct = async (req, res) => {
         ? true
         : product.bestseller;
     product.variants = updatedVariants;
+    product.discount = discount !== undefined ? Number(discount) : product.discount;
 
     await product.save();
 

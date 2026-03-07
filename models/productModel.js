@@ -140,6 +140,11 @@ const productSchema = new mongoose.Schema({
     type: [reviewSchema],
     default: [],
   },
+
+  discount: {
+    type: Number,
+    default: 0,
+  },
 });
 
 /**
