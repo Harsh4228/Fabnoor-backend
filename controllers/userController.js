@@ -2,9 +2,13 @@ import validator from "validator";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
+import dns from "dns";
+import { promisify } from "util";
 import userModel from "../models/userModel.js";
 import { sendWhatsAppMessage } from "../config/whatsappService.js";
 import { sendWelcomeEmail } from "../config/emailService.js";
+
+const resolveMx = promisify(dns.resolveMx);
 
 /* ================= TOKEN ================= */
 const createToken = (user) => {
@@ -74,6 +78,18 @@ const registerUser = async (req, res) => {
 
     if (!validator.isEmail(email)) {
       return res.json({ success: false, message: "Please enter a valid email" });
+    }
+
+    // ✅ Domain Validity Check (MX Records)
+    const domain = email.split('@')[1];
+    try {
+      const mxRecords = await resolveMx(domain);
+      if (!mxRecords || mxRecords.length === 0) {
+        return res.json({ success: false, message: "Email domain is invalid or cannot receive emails" });
+      }
+    } catch (err) {
+      console.warn(`[dns-check] MX lookup failed for ${domain}:`, err.message);
+      return res.json({ success: false, message: "Could not verify email domain" });
     }
 
     if (password.length < 8) {
