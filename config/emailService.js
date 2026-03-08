@@ -95,3 +95,31 @@ export const sendResetOtpEmail = async (toEmail, otp) => {
     text: `Your Fabnoor OTP: ${otp}\n\nValid for 10 minutes. Do not share.`,
   });
 };
+// ── Welcome Email ─────────────────────────────────────────────────────────────
+export const sendWelcomeEmail = async (toEmail, name) => {
+  return sendMail({
+    from: FROM(),
+    to: toEmail,
+    subject: "✨ Welcome to Fabnoor! - Your Fashion Journey Begins",
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;border:1px solid #f0e0e0;border-radius:12px;overflow:hidden;">
+        <div style="background:linear-gradient(135deg,#e91e8c,#f06292);padding:40px 24px;text-align:center;">
+          <h1 style="color:#fff;margin:0;font-size:28px;letter-spacing:1px;">✨ Welcome to Fabnoor</h1>
+        </div>
+        <div style="padding:32px;background-color:#ffffff;">
+          <p style="color:#333;font-size:18px;font-weight:bold;margin-top:0;">Hi ${name},</p>
+          <p style="color:#555;line-height:1.6;">We're absolutely thrilled to have you join the <strong>Fabnoor</strong> family! 💖</p>
+          <p style="color:#555;line-height:1.6;">Your account has been successfully created. You're now ready to explore our curated collections, track your orders, and enjoy a premium shopping experience.</p>
+          
+          <div style="text-align:center;margin:32px 0;">
+            <a href="https://fabnoor.com" style="background:#e91e8c;color:#fff;padding:14px 32px;text-decoration:none;border-radius:50px;font-weight:bold;display:inline-block;box-shadow:0 4px 15px rgba(233,30,140,0.3);">Start Shopping</a>
+          </div>
+
+          <p style="color:#888;font-size:14px;border-top:1px solid #eee;padding-top:20px;">If you have any questions, feel free to reply to this email. We're here to help!</p>
+          <p style="color:#999;font-size:12px;margin-bottom:0;">Happy shopping,<br><strong>Team Fabnoor</strong></p>
+        </div>
+      </div>
+    `,
+    text: `Hi ${name}, Welcome to Fabnoor! We're thrilled to have you. Start shopping now at https://fabnoor.com`,
+  });
+};

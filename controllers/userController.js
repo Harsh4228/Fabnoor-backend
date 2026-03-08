@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import userModel from "../models/userModel.js";
 import { sendWhatsAppMessage } from "../config/whatsappService.js";
+import { sendWelcomeEmail } from "../config/emailService.js";
 
 /* ================= TOKEN ================= */
 const createToken = (user) => {
@@ -93,6 +94,9 @@ const registerUser = async (req, res) => {
       password: hashedPassword,
       role: "user", // ✅ default role
     });
+
+    // Fire-and-forget background job: send the welcome email
+    sendWelcomeEmail(user.email, user.name).catch(err => console.error("Welcome email failed:", err));
 
     const token = createToken(user);
 
