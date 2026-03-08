@@ -1,6 +1,7 @@
 import { v2 as cloudinary } from "cloudinary";
 import userModel from "../models/userModel.js";
 import productModel from "../models/productModel.js";
+import categoryModel from "../models/categoryModel.js";
 
 /* ================= UTILS ================= */
 const safeKey = (val) =>
@@ -246,18 +247,12 @@ const getProductsByIds = async (req, res) => {
  */
 const getProductMetadata = async (req, res) => {
   try {
-    const categories = await productModel.distinct("category");
-    const subCategoriesRaw = await productModel.aggregate([
-      { $group: { _id: { category: "$category", subCategory: "$subCategory" } } },
-      { $match: { "_id.subCategory": { $ne: null } } }
-    ]);
-
-    // Group subcategories by category
+    const categoriesDoc = await categoryModel.find({}).sort({ name: 1 });
+    const categories = categoriesDoc.map(c => c.name);
     const subCategoriesMap = {};
-    subCategoriesRaw.forEach(item => {
-      const { category, subCategory } = item._id;
-      if (!subCategoriesMap[category]) subCategoriesMap[category] = [];
-      subCategoriesMap[category].push(subCategory);
+    
+    categoriesDoc.forEach(cat => {
+      subCategoriesMap[cat.name] = cat.subCategories;
     });
 
     res.json({ success: true, categories, subCategoriesMap });

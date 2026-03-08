@@ -20,6 +20,7 @@ import reelRoutes from "./routes/reelRoutes.js";
 import wishlistRoutes from "./routes/wishlistRoutes.js";
 import reviewRouter from "./routes/reviewRoute.js";
 import globalDiscountRouter from "./routes/globalDiscountRoute.js";
+import categoryRouter from "./routes/categoryRoute.js";
 import cors from "cors";
 
 
@@ -63,6 +64,7 @@ app.use("/api/reels", reelRoutes);
 app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/review", reviewRouter);
 app.use("/api/discount", globalDiscountRouter);
+app.use("/api/category", categoryRouter);
 
 // Health
 app.get("/", (req, res) => {
