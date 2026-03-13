@@ -24,10 +24,25 @@ const addProduct = async (req, res) => {
       discount,
     } = req.body;
 
-    if (!name || !description || !category || !subCategory || !variants) {
+    // Helper to parse comma-separated or JSON-stringified arrays
+    const parseArray = (val) => {
+      if (!val) return [];
+      if (Array.isArray(val)) return val;
+      try {
+        const parsed = JSON.parse(val);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
+      if (typeof val === 'string') return val.split(',').map(s => s.trim()).filter(Boolean);
+      return [val];
+    };
+
+    const finalCategory = parseArray(category);
+    const finalSubCategory = parseArray(subCategory);
+
+    if (!name || !description || !finalCategory.length || !finalSubCategory.length || !variants) {
       return res.status(400).json({
         success: false,
-        message: "All required fields must be filled",
+        message: "All required fields must be filled (including at least one category and subcategory)",
       });
     }
 
@@ -101,8 +116,8 @@ const addProduct = async (req, res) => {
     const product = await productModel.create({
       name,
       description,
-      category,
-      subCategory,
+      category: finalCategory,
+      subCategory: finalSubCategory,
       variants: finalVariants,
       bestseller: bestseller === "true" || bestseller === true,
       discount: Number(discount) || 0,
@@ -305,6 +320,21 @@ const editProduct = async (req, res) => {
     if (!product)
       return res.status(404).json({ success: false, message: "Not found" });
 
+    // Helper to parse comma-separated or JSON-stringified arrays
+    const parseArray = (val) => {
+      if (!val) return [];
+      if (Array.isArray(val)) return val;
+      try {
+        const parsed = JSON.parse(val);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
+      if (typeof val === 'string') return val.split(',').map(s => s.trim()).filter(Boolean);
+      return [val];
+    };
+
+    const finalCategory = parseArray(category);
+    const finalSubCategory = parseArray(subCategory);
+
     /* PARSE VARIANTS */
     let parsedVariants;
     try {
@@ -361,8 +391,8 @@ const editProduct = async (req, res) => {
 
     product.name = name ?? product.name;
     product.description = description ?? product.description;
-    product.category = category ?? product.category;
-    product.subCategory = subCategory ?? product.subCategory;
+    product.category = finalCategory.length ? finalCategory : product.category;
+    product.subCategory = finalSubCategory.length ? finalSubCategory : product.subCategory;
     product.bestseller = bestseller === "true" || bestseller === true;
     product.variants = updatedVariants;
     product.discount = discount !== undefined ? Number(discount) : product.discount;
