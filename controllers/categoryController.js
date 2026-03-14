@@ -14,9 +14,15 @@ const addCategory = async (req, res) => {
             return res.status(400).json({ success: false, message: "Category already exists" });
         }
 
+        let finalSequence = Number(sequence);
+        if (!finalSequence) {
+            const lastCategory = await categoryModel.findOne({}).sort({ sequence: -1 });
+            finalSequence = lastCategory ? (lastCategory.sequence || 0) + 1 : 1;
+        }
+
         const category = await categoryModel.create({ 
             name: name.trim(),
-            sequence: Number(sequence) || 0
+            sequence: finalSequence
         });
         res.json({ success: true, message: "Category added", category });
     } catch (error) {
