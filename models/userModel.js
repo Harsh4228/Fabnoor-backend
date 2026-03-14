@@ -49,7 +49,7 @@ const userSchema = new mongoose.Schema(
     resetOtp: { type: String, default: "" },
     resetOtpExpireAt: { type: Number, default: 0 },
   },
-  { minimize: false }
+  { minimize: false, timestamps: true }
 );
 
 const userModel =
