@@ -13,7 +13,7 @@ const categorySchema = new mongoose.Schema({
     },
     sequence: {
         type: Number,
-        default: 100
+        default: 1
     }
 }, { timestamps: true });
 

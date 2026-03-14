@@ -263,7 +263,7 @@ const getProductsByIds = async (req, res) => {
 const getProductMetadata = async (req, res) => {
   try {
     const categoriesDoc = await categoryModel.find({}).sort({ sequence: 1, name: 1 });
-    const categories = categoriesDoc.map(c => c.name);
+    const categories = categoriesDoc.map(c => ({ name: c.name, sequence: c.sequence || 1 }));
     const subCategoriesMap = {};
     
     categoriesDoc.forEach(cat => {
