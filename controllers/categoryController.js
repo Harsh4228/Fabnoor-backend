@@ -4,7 +4,7 @@ import productModel from "../models/productModel.js";
 // Add Category
 const addCategory = async (req, res) => {
     try {
-        const { name } = req.body;
+        const { name, sequence } = req.body;
         if (!name) {
             return res.status(400).json({ success: false, message: "Category name is required" });
         }
@@ -14,7 +14,10 @@ const addCategory = async (req, res) => {
             return res.status(400).json({ success: false, message: "Category already exists" });
         }
 
-        const category = await categoryModel.create({ name: name.trim() });
+        const category = await categoryModel.create({ 
+            name: name.trim(),
+            sequence: Number(sequence) || 0
+        });
         res.json({ success: true, message: "Category added", category });
     } catch (error) {
         console.error(error);
@@ -25,7 +28,7 @@ const addCategory = async (req, res) => {
 // List Categories
 const listCategories = async (req, res) => {
     try {
-        const categories = await categoryModel.find({}).sort({ name: 1 });
+        const categories = await categoryModel.find({}).sort({ sequence: 1, name: 1 });
         res.json({ success: true, categories });
     } catch (error) {
         console.error(error);
@@ -62,7 +65,7 @@ const removeCategory = async (req, res) => {
 // Update Category
 const updateCategory = async (req, res) => {
     try {
-        const { id, name } = req.body;
+        const { id, name, sequence } = req.body;
         if (!name) {
             return res.status(400).json({ success: false, message: "Name is required" });
         }
@@ -72,13 +75,12 @@ const updateCategory = async (req, res) => {
             return res.status(404).json({ success: false, message: "Category not found" });
         }
 
-        // If name changes, we theoretically should update all products, 
-        // but the user's request focuses on CRUD. 
-        // For safety, let's just update the category name if no products exist, 
-        // OR warn that existing products will keep the old string until updated.
-        // However, a simple name update is usually expected.
+        const updateData = { 
+            name: name.trim(),
+            sequence: sequence !== undefined ? Number(sequence) : category.sequence
+        };
         
-        await categoryModel.findByIdAndUpdate(id, { name: name.trim() });
+        await categoryModel.findByIdAndUpdate(id, updateData);
         res.json({ success: true, message: "Category updated" });
     } catch (error) {
         console.error(error);

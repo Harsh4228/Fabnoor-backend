@@ -10,6 +10,10 @@ const categorySchema = new mongoose.Schema({
     subCategories: {
         type: [String],
         default: []
+    },
+    sequence: {
+        type: Number,
+        default: 0
     }
 }, { timestamps: true });
 
