@@ -7,6 +7,7 @@ import {
   removeProduct,
   getProductsByIds,
   getProductMetadata,
+  updateVariantQuick,
 } from "../controllers/productController.js";
 
 import upload from "../middleware/multer.js";
@@ -41,6 +42,13 @@ productRouter.post(
   authUser,
   adminAuth,
   removeProduct
+);
+
+productRouter.post(
+  "/update-quick",
+  authUser,
+  adminAuth,
+  updateVariantQuick
 );
 
 /**

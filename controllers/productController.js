@@ -406,6 +406,32 @@ const editProduct = async (req, res) => {
   }
 };
 
+/**
+ * =========================
+ * QUICK UPDATE (PRICE/STOCK)
+ * =========================
+ */
+const updateVariantQuick = async (req, res) => {
+  try {
+    const { id, variantUpdates } = req.body; // variantUpdates: [{ code, price, stock }]
+    const product = await productModel.findById(id);
+    if (!product) return res.status(404).json({ success: false, message: "Not found" });
+
+    variantUpdates.forEach(update => {
+      const idx = product.variants.findIndex(v => v.code === update.code);
+      if (idx !== -1) {
+        if (update.price !== undefined) product.variants[idx].price = Number(update.price);
+        if (update.stock !== undefined) product.variants[idx].stock = Number(update.stock);
+      }
+    });
+
+    await product.save();
+    res.json({ success: true, message: "Quick update successful", product });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export {
   addProduct,
   editProduct,
@@ -414,4 +440,5 @@ export {
   removeProduct,
   getProductsByIds,
   getProductMetadata,
+  updateVariantQuick,
 };
