@@ -5,8 +5,7 @@ import mongoose from "mongoose";
 import dns from "dns";
 import { promisify } from "util";
 import userModel from "../models/userModel.js";
-import { sendWhatsAppMessage } from "../config/whatsappService.js";
-import { sendWelcomeEmail } from "../config/emailService.js";
+import { sendWelcomeEmail, sendResetOtpEmail } from "../config/emailService.js";
 
 const resolveMx = promisify(dns.resolveMx);
 
@@ -358,12 +357,12 @@ const removeAdmin = async (req, res) => {
 /* ================= REQUEST RESET OTP ================= */
 const requestResetOtp = async (req, res) => {
   try {
-    const { mobile } = req.body;
-    if (!mobile) {
-      return res.json({ success: false, message: "Mobile number is required" });
+    const { email } = req.body;
+    if (!email) {
+      return res.json({ success: false, message: "Email is required" });
     }
 
-    const user = await userModel.findOne({ mobile });
+    const user = await userModel.findOne({ email });
     if (!user) {
       return res.json({ success: false, message: "User not found" });
     }
@@ -377,21 +376,22 @@ const requestResetOtp = async (req, res) => {
     await user.save();
 
     console.log("╔══════════════════════════════════╗");
-    console.log(`║  OTP for ${user.mobile}`);
+    console.log(`║  OTP for ${user.email}`);
     console.log(`║  CODE: ${otp}  (10 min)`);
     console.log("╚══════════════════════════════════╝");
 
-    // Send immediate response
-    res.json({
-      success: true,
-      message: "OTP sent successfully to your WhatsApp number",
-    });
+    // Send the OTP via Email
+    const emailSent = await sendResetOtpEmail(user.email, otp);
 
-    // Fire-and-forget background job: send the OTP directly to the user's WhatsApp
-    if (user.mobile) {
-      const waMsg = `🔐 *Fabnoor Password Reset OTP*\n\nYour OTP is: *${otp}*\n\n⏰ Valid for 10 minutes.\nDo not share this with anyone.`;
-      sendWhatsAppMessage(user.mobile, waMsg).then(sent => {
-        if (!sent) console.log("⚠️ WhatsApp API not configured. OTP was printed to console.");
+    if (emailSent) {
+      return res.json({
+        success: true,
+        message: "OTP sent successfully to your email address",
+      });
+    } else {
+      return res.json({
+        success: false,
+        message: "Failed to send OTP email. Please try again later.",
       });
     }
 
@@ -403,9 +403,9 @@ const requestResetOtp = async (req, res) => {
 /* ================= RESET PASSWORD ================= */
 const resetPassword = async (req, res) => {
   try {
-    const { mobile, otp, newPassword } = req.body;
+    const { email, otp, newPassword } = req.body;
 
-    if (!mobile || !otp || !newPassword) {
+    if (!email || !otp || !newPassword) {
       return res.json({ success: false, message: "Missing required fields" });
     }
 
@@ -413,7 +413,7 @@ const resetPassword = async (req, res) => {
       return res.json({ success: false, message: "Password must be at least 8 characters" });
     }
 
-    const user = await userModel.findOne({ mobile });
+    const user = await userModel.findOne({ email });
     if (!user) {
       return res.json({ success: false, message: "User not found" });
     }
