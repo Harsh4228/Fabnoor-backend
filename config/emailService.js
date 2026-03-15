@@ -17,9 +17,14 @@ const createTransporter = () => {
     return null;
   }
 
+  // Use explicit host/port for better reliability on cloud platforms like Render
   return nodemailer.createTransport({
-    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true, // Use SSL
     auth: { user, pass },
+    connectionTimeout: 10000, // 10 seconds timeout
+    greetingTimeout: 10000,
   });
 };
 
