@@ -1,4 +1,9 @@
 import mongoose from "mongoose";
+import dns from "dns";
+
+// Force Google DNS to ensure SRV record lookups (used by mongodb+srv://) work
+// regardless of the local ISP/router DNS configuration.
+dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
 
 const connectDB = async () => {
   try {
