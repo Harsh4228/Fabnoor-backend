@@ -1,17 +1,8 @@
 import express from "express";
 import "dotenv/config";
 import connectDB from "./config/mongodb.js";
-
-// Global safety logs to surface any uncaught errors during limited checks
-process.on('uncaughtException', (err) => {
-  console.error('UNCAUGHT EXCEPTION:', err && err.stack ? err.stack : err);
-  // Do not exit immediately during debug; allow inspection
-});
-
-process.on('unhandledRejection', (reason) => {
-  console.error('UNHANDLED REJECTION:', reason && reason.stack ? reason.stack : reason);
-});
-import connectCloudinary from "./config/cloudinary.js";
+import path from "path";
+import { fileURLToPath } from "url";
 import userRouter from "./routes/userRoute.js";
 import productRouter from "./routes/productRoute.js";
 import cartRouter from "./routes/cartRoute.js";
@@ -22,6 +13,19 @@ import reviewRouter from "./routes/reviewRoute.js";
 import globalDiscountRouter from "./routes/globalDiscountRoute.js";
 import categoryRouter from "./routes/categoryRoute.js";
 import cors from "cors";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Global safety logs to surface any uncaught errors during limited checks
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err && err.stack ? err.stack : err);
+  // Do not exit immediately during debug; allow inspection
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('UNHANDLED REJECTION:', reason && reason.stack ? reason.stack : reason);
+});
 
 
 
@@ -35,16 +39,15 @@ app.use(cors({
 }));
 // DB & services
 if (process.env.SKIP_DB === "true") {
-  console.log("SKIP_DB=true - skipping DB and Cloudinary initialization (limited checks)");
+  console.log("SKIP_DB=true - skipping DB initialization (limited checks)");
 } else {
   connectDB();
-  connectCloudinary();
 }
 
 // Middleware
 app.use(express.json());
 
-// 🚀 HARD ALLOW EVERYTHING (for debugging)
+// CORS headers must come BEFORE static files so browsers can load images/videos cross-origin
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Headers", "*");
@@ -54,6 +57,9 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// Serve uploaded files (images & videos) as static assets
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Routes
 app.use("/api/user", userRouter);

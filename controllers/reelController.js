@@ -1,6 +1,35 @@
 import Reel from "../models/Reel.js";
-import { cloudinary } from "../config/cloudinary.js";
 import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const deleteUploadedFile = (fileUrl) => {
+  if (!fileUrl) return;
+  try {
+    const parts = fileUrl.split("/uploads/");
+    if (parts.length < 2) return;
+    const filename = parts[parts.length - 1];
+    if (!filename) return;
+    const filePath = path.join(__dirname, "..", "uploads", filename);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (e) {
+    console.error("Failed to delete uploaded file:", e.message);
+  }
+};
+
+// Build absolute URL for an uploaded file.
+// Uses BACKEND_URL from .env when deployed; falls back to the current request's host for local dev.
+const buildFileUrl = (req, filename) => {
+  const base = process.env.BACKEND_URL
+    ? process.env.BACKEND_URL.replace(/\/$/, "")
+    : `${req.protocol}://${req.get("host")}`;
+  return `${base}/uploads/${filename}`;
+};
 
 /* =========================
    UPLOAD REEL (ADMIN)
@@ -16,18 +45,13 @@ export const uploadReel = async (req, res) => {
       return res.status(400).json({ message: "Video file is required" });
     }
 
-    const result = await cloudinary.uploader.upload(req.file.path, {
-      resource_type: "video",
-      folder: "reels",
-    });
-
-    // remove temp file
-    fs.unlink(req.file.path, () => {});
+    const baseUrl = process.env.BACKEND_URL || "";
+    const videoUrl = buildFileUrl(req, req.file.filename);
 
     const reel = await Reel.create({
-      videoUrl: result.secure_url,
+      videoUrl,
       caption: req.body.caption || "",
-      createdBy: req.user._id, // ✅ FIXED LINE
+      createdBy: req.user._id,
     });
 
     return res.status(201).json(reel);
@@ -84,7 +108,6 @@ export const deleteReel = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // 2️⃣ Find & delete in one step
     const reel = await Reel.findByIdAndDelete(id);
 
     if (!reel) {
@@ -94,6 +117,10 @@ export const deleteReel = async (req, res) => {
       });
     }
 
+    // Delete the video file from disk
+    if (reel.videoUrl) {
+      deleteUploadedFile(reel.videoUrl);
+    }
 
     return res.status(200).json({
       success: true,

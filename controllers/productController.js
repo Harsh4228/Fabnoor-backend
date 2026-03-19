@@ -1,7 +1,36 @@
-import { v2 as cloudinary } from "cloudinary";
 import userModel from "../models/userModel.js";
 import productModel from "../models/productModel.js";
 import categoryModel from "../models/categoryModel.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Build absolute URL for an uploaded file.
+// Uses BACKEND_URL from .env when deployed; falls back to the current request's host for local dev.
+const buildFileUrl = (req, filename) => {
+  const base = process.env.BACKEND_URL
+    ? process.env.BACKEND_URL.replace(/\/$/, "")
+    : `${req.protocol}://${req.get("host")}`;
+  return `${base}/uploads/${filename}`;
+};
+const deleteUploadedFile = (fileUrl) => {
+  if (!fileUrl) return;
+  try {
+    const parts = fileUrl.split("/uploads/");
+    if (parts.length < 2) return;
+    const filename = parts[parts.length - 1];
+    if (!filename) return;
+    const filePath = path.join(__dirname, "..", "uploads", filename);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (e) {
+    console.error("Failed to delete uploaded file:", e.message);
+  }
+};
 
 /* ================= UTILS ================= */
 const safeKey = (val) =>
@@ -91,14 +120,7 @@ const addProduct = async (req, res) => {
           throw new Error(`Images required for ${color} (${fabric})`);
         }
 
-        const images = await Promise.all(
-          files.map(async (file) => {
-            const res = await cloudinary.uploader.upload(file.path, {
-              folder: "products",
-            });
-            return res.secure_url;
-          })
-        );
+        const images = files.map((file) => buildFileUrl(req, file.filename));
 
         return {
           color,
@@ -284,7 +306,17 @@ const getProductMetadata = async (req, res) => {
 const removeProduct = async (req, res) => {
   try {
     const { id } = req.body;
-    await productModel.findByIdAndDelete(id);
+    const product = await productModel.findById(id);
+
+    if (product) {
+      // Delete all variant images from disk
+      for (const variant of product.variants || []) {
+        for (const imageUrl of variant.images || []) {
+          deleteUploadedFile(imageUrl);
+        }
+      }
+      await product.deleteOne();
+    }
 
     // Cleanup wishlist for all users
     await userModel.updateMany(
@@ -364,16 +396,19 @@ const editProduct = async (req, res) => {
         const imageKey = `${safeKey(color)}_${safeKey(fabric)}_images`;
         const newFiles = imageMap[imageKey] || [];
 
-        let images = Array.isArray(existingImages) ? [...existingImages] : [];
+        const keepImages = Array.isArray(existingImages) ? [...existingImages] : [];
+
+        // Delete old images that were removed by the admin
+        const oldVariant = product.variants.find((v) => v.code === code);
+        for (const oldUrl of (oldVariant?.images || [])) {
+          if (!keepImages.includes(oldUrl)) {
+            deleteUploadedFile(oldUrl);
+          }
+        }
+
+        let images = keepImages;
         if (newFiles.length) {
-          const newUploadedImages = await Promise.all(
-            newFiles.map(async (file) => {
-              const res = await cloudinary.uploader.upload(file.path, {
-                folder: "products",
-              });
-              return res.secure_url;
-            })
-          );
+          const newUploadedImages = newFiles.map((file) => buildFileUrl(req, file.filename));
           images = [...images, ...newUploadedImages];
         }
 
