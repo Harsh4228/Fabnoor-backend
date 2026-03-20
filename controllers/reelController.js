@@ -23,11 +23,11 @@ const deleteUploadedFile = (fileUrl) => {
 };
 
 // Build absolute URL for an uploaded file.
-// Uses BACKEND_URL from .env when deployed; falls back to the current request's host for local dev.
+// Priority: BACKEND_URL env var > X-Forwarded-Proto (nginx proxy) > req.protocol
 const buildFileUrl = (req, filename) => {
   const base = process.env.BACKEND_URL
     ? process.env.BACKEND_URL.replace(/\/$/, "")
-    : `${req.protocol}://${req.get("host")}`;
+    : `${req.get("x-forwarded-proto") || req.protocol}://${req.get("host")}`;
   return `${base}/uploads/${filename}`;
 };
 
