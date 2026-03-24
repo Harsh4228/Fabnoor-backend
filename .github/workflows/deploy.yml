@@ -19,6 +19,12 @@ jobs:
           script: |
             export PATH=$PATH:/root/.nvm/versions/node/v24.14.0/bin
 
+            echo "Node path loaded"
+
+            which node
+            which npm
+            which pm2
+
             cd /var/www/fabnoor/Fabnoor-backend  
 
             git pull origin main
