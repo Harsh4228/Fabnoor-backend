@@ -17,8 +17,7 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            export PATH=$PATH:/root/.nvm/versions/node/v24.14.0/bin
 
             cd /var/www/fabnoor/Fabnoor-backend  
 
