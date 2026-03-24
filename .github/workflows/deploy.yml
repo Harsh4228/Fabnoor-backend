@@ -13,14 +13,14 @@ jobs:
       - name: Deploy Backend
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.HOST }}
+          host: ${{ secrets.HOST }}       
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           script: |
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-            cd /var/www/fabnoor/Fabnoor-backend
+            cd /var/www/fabnoor/Fabnoor-backend  
 
             git pull origin main
 
