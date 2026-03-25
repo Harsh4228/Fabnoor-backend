@@ -820,6 +820,104 @@ const getWhatsAppSlip = async (req, res) => {
   }
 };
 
+/* =========================
+   ADMIN: DASHBOARD STATS
+========================= */
+const getDashboardStats = async (req, res) => {
+  try {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+
+    const validOrderQ = { status: { $ne: "Payment Pending" } };
+    const deliveredQ  = { ...validOrderQ, status: "Delivered" };
+
+    const [
+      totalProducts,
+      totalUsers,
+      totalOrders,
+      pendingOrders,
+      dispatchedOrders,
+      outForDeliveryOrders,
+      deliveredOrders,
+      cancelledOrders,
+      todayOrders,
+      monthOrders,
+      lastMonthOrders,
+      revenueAgg,
+      monthRevenueAgg,
+      lastMonthRevenueAgg,
+      recentOrders,
+      lowStockProducts,
+    ] = await Promise.all([
+      productModel.countDocuments(),
+      userModel.countDocuments({ role: { $ne: "admin" } }),
+      orderModel.countDocuments(validOrderQ),
+      orderModel.countDocuments({ ...validOrderQ, status: "Order Placed" }),
+      orderModel.countDocuments({ ...validOrderQ, status: "Dispatched" }),
+      orderModel.countDocuments({ ...validOrderQ, status: "Out for Delivery" }),
+      orderModel.countDocuments(deliveredQ),
+      orderModel.countDocuments({ ...validOrderQ, status: "Cancelled" }),
+      orderModel.countDocuments({ ...validOrderQ, createdAt: { $gte: startOfToday } }),
+      orderModel.countDocuments({ ...validOrderQ, createdAt: { $gte: startOfMonth } }),
+      orderModel.countDocuments({ ...validOrderQ, createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth } }),
+      orderModel.aggregate([
+        { $match: deliveredQ },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]),
+      orderModel.aggregate([
+        { $match: { ...deliveredQ, createdAt: { $gte: startOfMonth } } },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]),
+      orderModel.aggregate([
+        { $match: { ...deliveredQ, createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth } } },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]),
+      orderModel.find(validOrderQ).sort({ createdAt: -1 }).limit(8).populate("userId", "name email"),
+      productModel.aggregate([
+        { $unwind: "$variants" },
+        { $match: { "variants.stock": { $gt: 0, $lt: 6 } } },
+        { $project: { name: 1, "variants.color": 1, "variants.stock": 1, "variants.images": 1 } },
+        { $limit: 5 },
+      ]),
+    ]);
+
+    // Monthly revenue chart (last 6 months)
+    const monthlyChart = await orderModel.aggregate([
+      { $match: { ...deliveredQ, createdAt: { $gte: new Date(now.getFullYear(), now.getMonth() - 5, 1) } } },
+      { $group: { _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } }, revenue: { $sum: "$amount" }, orders: { $sum: 1 } } },
+      { $sort: { "_id.year": 1, "_id.month": 1 } },
+    ]);
+
+    res.json({
+      success: true,
+      stats: {
+        totalProducts,
+        totalUsers,
+        totalOrders,
+        pendingOrders,
+        dispatchedOrders,
+        outForDeliveryOrders,
+        deliveredOrders,
+        cancelledOrders,
+        todayOrders,
+        monthOrders,
+        lastMonthOrders,
+        totalRevenue: revenueAgg[0]?.total || 0,
+        monthRevenue: monthRevenueAgg[0]?.total || 0,
+        lastMonthRevenue: lastMonthRevenueAgg[0]?.total || 0,
+        recentOrders,
+        lowStockProducts,
+        monthlyChart,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export {
   placeOrder,
   placeOrderWhatsApp,
@@ -831,6 +929,7 @@ export {
   updatePaymentStatus,
   getInvoice,
   getWhatsAppSlip,
+  getDashboardStats,
 };
 
 /* =========================

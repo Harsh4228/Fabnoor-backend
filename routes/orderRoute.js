@@ -10,6 +10,7 @@ import {
   getInvoice,
   verifyRazorpay,
   getWhatsAppSlip,
+  getDashboardStats,
 } from "../controllers/orderController.js";
 
 import authUser from "../middleware/auth.js";
@@ -24,6 +25,7 @@ orderRouter.post("/list", authUser, adminAuth, allOrders);
 orderRouter.post("/status", authUser, adminAuth, updateStatus);
 orderRouter.post("/paymentstatus", authUser, adminAuth, updatePaymentStatus);
 orderRouter.get("/invoice/:orderId", authUser, adminAuth, getInvoice);
+orderRouter.get("/dashboard-stats", authUser, adminAuth, getDashboardStats);
 
 /* ================= USER FEATURES ================= */
 
