@@ -12,6 +12,7 @@ import wishlistRoutes from "./routes/wishlistRoutes.js";
 import reviewRouter from "./routes/reviewRoute.js";
 import globalDiscountRouter from "./routes/globalDiscountRoute.js";
 import categoryRouter from "./routes/categoryRoute.js";
+import heroRouter from "./routes/heroImageRoute.js";
 import cors from "cors";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -71,6 +72,7 @@ app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/review", reviewRouter);
 app.use("/api/discount", globalDiscountRouter);
 app.use("/api/category", categoryRouter);
+app.use("/api/hero", heroRouter);
 
 // Health
 app.get("/", (req, res) => {
