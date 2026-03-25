@@ -68,10 +68,10 @@ const addProduct = async (req, res) => {
     const finalCategory = parseArray(category);
     const finalSubCategory = parseArray(subCategory);
 
-    if (!name || !description || !finalCategory.length || !finalSubCategory.length || !variants) {
+    if (!name || !description || !variants) {
       return res.status(400).json({
         success: false,
-        message: "All required fields must be filled (including at least one category and subcategory)",
+        message: "Name, description and variants are required",
       });
     }
 
@@ -426,8 +426,8 @@ const editProduct = async (req, res) => {
 
     product.name = name ?? product.name;
     product.description = description ?? product.description;
-    product.category = finalCategory.length ? finalCategory : product.category;
-    product.subCategory = finalSubCategory.length ? finalSubCategory : product.subCategory;
+    product.category = finalCategory;
+    product.subCategory = finalSubCategory;
     product.bestseller = bestseller === "true" || bestseller === true;
     product.variants = updatedVariants;
     product.discount = discount !== undefined ? Number(discount) : product.discount;
