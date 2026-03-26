@@ -215,7 +215,10 @@ const listProducts = async (req, res) => {
       pipeline.push({
         $sort: { minPrice: sortType === "low-high" ? 1 : -1 }
       });
+    } else if (sortType === "old-new") {
+      pipeline.push({ $sort: { date: 1 } });
     } else {
+      // "new-old" and default "relevant" both sort newest first
       pipeline.push({ $sort: { date: -1 } });
     }
 
