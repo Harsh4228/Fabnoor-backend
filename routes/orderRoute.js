@@ -11,6 +11,7 @@ import {
   verifyRazorpay,
   getWhatsAppSlip,
   getDashboardStats,
+  getDeliveredReport,
 } from "../controllers/orderController.js";
 
 import authUser from "../middleware/auth.js";
@@ -20,16 +21,15 @@ const orderRouter = express.Router();
 
 /* ================= ADMIN FEATURES ================= */
 
-// ✅ FIXED ORDER
 orderRouter.post("/list", authUser, adminAuth, allOrders);
 orderRouter.post("/status", authUser, adminAuth, updateStatus);
 orderRouter.post("/paymentstatus", authUser, adminAuth, updatePaymentStatus);
 orderRouter.get("/invoice/:orderId", authUser, adminAuth, getInvoice);
 orderRouter.get("/dashboard-stats", authUser, adminAuth, getDashboardStats);
+orderRouter.get("/report", authUser, adminAuth, getDeliveredReport);
 
 /* ================= USER FEATURES ================= */
 
-// ❌ adminAuth REMOVED (users can place orders)
 orderRouter.post("/place", authUser, placeOrder);
 orderRouter.post("/whatsapp", authUser, placeOrderWhatsApp);
 orderRouter.get("/slip/:orderId", authUser, getWhatsAppSlip);

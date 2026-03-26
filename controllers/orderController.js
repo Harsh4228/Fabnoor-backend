@@ -918,6 +918,169 @@ const getDashboardStats = async (req, res) => {
   }
 };
 
+/* =========================
+   ADMIN: DELIVERED REPORT
+========================= */
+const getDeliveredReport = async (req, res) => {
+  try {
+    const {
+      from,
+      to,
+      paymentMethod,
+      state,
+      city,
+      search,
+      page = 1,
+      limit = 50,
+      exportAll,
+    } = req.query;
+
+    // ── Base match: only delivered orders ──────────────────────
+    const match = { status: "Delivered" };
+
+    if (from || to) {
+      match.createdAt = {};
+      if (from) match.createdAt.$gte = new Date(from);
+      if (to) {
+        const toDate = new Date(to);
+        toDate.setHours(23, 59, 59, 999);
+        match.createdAt.$lte = toDate;
+      }
+    }
+
+    if (paymentMethod && paymentMethod !== "All") {
+      match.paymentMethod = paymentMethod;
+    }
+
+    if (state && state !== "All") {
+      match["address.state"] = { $regex: new RegExp(`^${state}$`, "i") };
+    }
+
+    if (city) {
+      match["address.city"] = { $regex: new RegExp(city, "i") };
+    }
+
+    // ── Fetch orders with user populated ──────────────────────
+    let query = orderModel
+      .find(match)
+      .populate("userId", "name shopName mobile email")
+      .sort({ createdAt: -1 });
+
+    const totalCount = await orderModel.countDocuments(match);
+
+    // Pagination: skip for table view; return all for export
+    if (!exportAll || exportAll !== "true") {
+      const pageNum = parseInt(page, 10) || 1;
+      const limitNum = parseInt(limit, 10) || 50;
+      query = query.skip((pageNum - 1) * limitNum).limit(limitNum);
+    }
+
+    let orders = await query.lean();
+
+    // ── Optional: text search across order# / customer / product ──
+    if (search && search.trim()) {
+      const s = search.trim().toLowerCase();
+      orders = orders.filter((o) => {
+        const orderNo = (o.orderNumber || "").toLowerCase();
+        const custName = (o.userId?.name || o.address?.fullName || "").toLowerCase();
+        const custShop = (o.userId?.shopName || "").toLowerCase();
+        const products = (o.items || []).map((i) => (i.name || "").toLowerCase());
+        return (
+          orderNo.includes(s) ||
+          custName.includes(s) ||
+          custShop.includes(s) ||
+          products.some((p) => p.includes(s))
+        );
+      });
+    }
+
+    // ── Expand to line-item rows (one row per item per order) ──
+    const rows = [];
+    for (const o of orders) {
+      const orderDate = o.createdAt
+        ? new Date(o.createdAt).toISOString().split("T")[0]
+        : "";
+      const customerName = o.userId?.name || o.address?.fullName || "—";
+      const shopName     = o.userId?.shopName || "—";
+      const phone        = o.userId?.mobile || o.address?.phone || "—";
+      const email        = o.userId?.email || "—";
+      const addrCity     = o.address?.city || "—";
+      const addrState    = o.address?.state || "—";
+      const addrLine     = o.address?.addressLine || "—";
+      const pincode      = o.address?.pincode || "—";
+
+      for (const item of o.items || []) {
+        const unitPrice  = Number(item.price) || 0;
+        const qty        = Number(item.quantity) || 1;
+        rows.push({
+          orderId:        o._id.toString(),
+          orderNumber:    o.orderNumber || o._id.toString(),
+          orderDate,
+          customerName,
+          shopName,
+          phone,
+          email,
+          city:           addrCity,
+          state:          addrState,
+          addressLine:    addrLine,
+          pincode,
+          productName:    item.name || "—",
+          color:          item.color || "—",
+          fabric:         item.fabric || item.type || "—",
+          sizes:          (item.size || []).join(", "),
+          quantity:       qty,
+          unitPrice,
+          lineTotal:      unitPrice * qty,
+          paymentMethod:  o.paymentMethod || "—",
+          paymentStatus:  o.payment ? "Paid" : "Unpaid",
+          orderTotal:     o.amount || 0,
+        });
+      }
+    }
+
+    // ── Summary stats (computed from all filtered orders, not just page) ──
+    const allForSummary = exportAll === "true"
+      ? orders
+      : await orderModel.find(match).lean();
+
+    let sumOrders  = 0;
+    let sumRevenue = 0;
+    let sumItems   = 0;
+    const customerSet = new Set();
+    const stateSet    = new Set();
+
+    for (const o of allForSummary) {
+      sumOrders++;
+      sumRevenue += Number(o.amount) || 0;
+      for (const item of o.items || []) {
+        sumItems += Number(item.quantity) || 1;
+      }
+      if (o.userId) customerSet.add(o.userId.toString());
+      if (o.address?.state) stateSet.add(o.address.state);
+    }
+
+    // ── Distinct states for filter dropdown ──
+    const allStates = await orderModel.distinct("address.state", { status: "Delivered" });
+
+    res.json({
+      success: true,
+      rows,
+      totalCount: exportAll === "true" ? rows.length : totalCount,
+      summary: {
+        totalOrders:    sumOrders,
+        totalRevenue:   sumRevenue,
+        totalItems:     sumItems,
+        avgOrderValue:  sumOrders > 0 ? Math.round(sumRevenue / sumOrders) : 0,
+        uniqueCustomers: customerSet.size,
+      },
+      states: allStates.filter(Boolean).sort(),
+    });
+  } catch (error) {
+    console.error("getDeliveredReport error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export {
   placeOrder,
   placeOrderWhatsApp,
@@ -930,6 +1093,7 @@ export {
   getInvoice,
   getWhatsAppSlip,
   getDashboardStats,
+  getDeliveredReport,
 };
 
 /* =========================
