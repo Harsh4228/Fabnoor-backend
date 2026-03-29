@@ -8,6 +8,18 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/* Canonical size order — used to normalise sizes before saving */
+const SIZE_ORDER = ["S","M","L","XL","XXL","XXXL","4XL","5XL","6XL","7XL","Free Size"];
+const sortSizes = (sizes) =>
+  [...(sizes || [])].sort((a, b) => {
+    const ai = SIZE_ORDER.indexOf(a);
+    const bi = SIZE_ORDER.indexOf(b);
+    if (ai === -1 && bi === -1) return 0;
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+
 // Build absolute URL for an uploaded file.
 // Priority: BACKEND_URL env var > X-Forwarded-Proto (nginx proxy) > req.protocol
 const buildFileUrl = (req, filename) => {
@@ -127,7 +139,7 @@ const addProduct = async (req, res) => {
           code,
           fabric,
           images,
-          sizes,
+          sizes: sortSizes(sizes),
           price,
           stock,
         };
@@ -420,7 +432,7 @@ const editProduct = async (req, res) => {
           code,
           fabric,
           images,
-          sizes,
+          sizes: sortSizes(sizes),
           price,
           stock,
         };
