@@ -142,6 +142,7 @@ const addProduct = async (req, res) => {
           sizes: sortSizes(sizes),
           price,
           stock,
+          date: Date.now(),
         };
       })
     );
@@ -228,10 +229,36 @@ const listProducts = async (req, res) => {
         $sort: { minPrice: sortType === "low-high" ? 1 : -1 }
       });
     } else if (sortType === "old-new") {
-      pipeline.push({ $sort: { date: 1 } });
+      pipeline.push({
+        $addFields: {
+          latestVariantDate: {
+            $max: {
+              $map: {
+                input: "$variants",
+                as: "v",
+                in: { $ifNull: ["$$v.date", "$date"] }
+              }
+            }
+          }
+        }
+      });
+      pipeline.push({ $sort: { latestVariantDate: 1 } });
     } else {
-      // "new-old" and default "relevant" both sort newest first
-      pipeline.push({ $sort: { date: -1 } });
+      // "new-old" and default "relevant" — sort by most recently added/updated variant
+      pipeline.push({
+        $addFields: {
+          latestVariantDate: {
+            $max: {
+              $map: {
+                input: "$variants",
+                as: "v",
+                in: { $ifNull: ["$$v.date", "$date"] }
+              }
+            }
+          }
+        }
+      });
+      pipeline.push({ $sort: { latestVariantDate: -1 } });
     }
 
     const pageNum = parseInt(page, 10) || 1;
@@ -460,6 +487,8 @@ const editProduct = async (req, res) => {
           images = [...images, ...newUploadedImages];
         }
 
+        const isNewVariant = !product.variants.find((v) => v.code === code);
+
         return {
           color,
           code,
@@ -468,6 +497,8 @@ const editProduct = async (req, res) => {
           sizes: sortSizes(sizes),
           price,
           stock,
+          hidden: oldVariant?.hidden || false,
+          date: isNewVariant ? Date.now() : (oldVariant?.date || product.date || Date.now()),
         };
       })
     );

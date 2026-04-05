@@ -95,6 +95,10 @@ const colorVariantSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    date: {
+      type: Number,
+      default: 0,
+    },
   },
   { _id: false }
 );
