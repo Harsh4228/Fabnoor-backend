@@ -248,6 +248,34 @@ const listProducts = async (req, res) => {
 
     pipeline.push({ $facet: facet });
 
+    // Strip hidden variants from each product after facet
+    const filterHiddenStage = {
+      $project: {
+        data: {
+          $map: {
+            input: "$data",
+            as: "product",
+            in: {
+              $mergeObjects: [
+                "$$product",
+                {
+                  variants: {
+                    $filter: {
+                      input: "$$product.variants",
+                      as: "v",
+                      cond: { $ne: ["$$v.hidden", true] },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+        metadata: 1,
+      },
+    };
+    pipeline.push(filterHiddenStage);
+
     const result = await productModel.aggregate(pipeline);
     const products = result[0].data;
     const totalCount = result[0].metadata[0]?.totalCount || 0;
@@ -265,10 +293,15 @@ const listProducts = async (req, res) => {
  */
 const singleProduct = async (req, res) => {
   try {
-    const product = await productModel.findById(req.params.id);
+    const product = await productModel.findById(req.params.id).lean();
     if (!product)
       return res.status(404).json({ success: false, message: "Not found" });
-    res.json({ success: true, product });
+    // Strip hidden variants for public view
+    const filtered = {
+      ...product,
+      variants: (product.variants || []).filter((v) => !v.hidden),
+    };
+    res.json({ success: true, product: filtered });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -482,6 +515,37 @@ const updateVariantQuick = async (req, res) => {
   }
 };
 
+/**
+ * =========================
+ * TOGGLE VARIANT HIDDEN (ADMIN)
+ * =========================
+ */
+const toggleVariantHidden = async (req, res) => {
+  try {
+    const { id, variantCode } = req.body;
+    if (!id || !variantCode)
+      return res.status(400).json({ success: false, message: "id and variantCode required" });
+
+    const product = await productModel.findById(id);
+    if (!product) return res.status(404).json({ success: false, message: "Not found" });
+
+    const idx = product.variants.findIndex((v) => v.code === variantCode);
+    if (idx === -1)
+      return res.status(404).json({ success: false, message: "Variant not found" });
+
+    product.variants[idx].hidden = !product.variants[idx].hidden;
+    await product.save();
+
+    res.json({
+      success: true,
+      hidden: product.variants[idx].hidden,
+      message: product.variants[idx].hidden ? "Variant hidden from website" : "Variant visible on website",
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export {
   addProduct,
   editProduct,
@@ -491,4 +555,6 @@ export {
   getProductsByIds,
   getProductMetadata,
   updateVariantQuick,
+  toggleVariantHidden,
 };
+

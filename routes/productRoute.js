@@ -8,6 +8,7 @@ import {
   getProductsByIds,
   getProductMetadata,
   updateVariantQuick,
+  toggleVariantHidden,
 } from "../controllers/productController.js";
 
 import upload from "../middleware/multer.js";
@@ -49,6 +50,13 @@ productRouter.post(
   authUser,
   adminAuth,
   updateVariantQuick
+);
+
+productRouter.post(
+  "/toggle-variant-hidden",
+  authUser,
+  adminAuth,
+  toggleVariantHidden
 );
 
 /**
