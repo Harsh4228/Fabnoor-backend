@@ -14,6 +14,7 @@ import globalDiscountRouter from "./routes/globalDiscountRoute.js";
 import categoryRouter from "./routes/categoryRoute.js";
 import heroRouter from "./routes/heroImageRoute.js";
 import pageImageRouter from "./routes/pageImageRoute.js";
+import signupRequestRouter from "./routes/signupRequestRoute.js";
 import cors from "cors";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -75,6 +76,7 @@ app.use("/api/discount", globalDiscountRouter);
 app.use("/api/category", categoryRouter);
 app.use("/api/hero", heroRouter);
 app.use("/api/page-images", pageImageRouter);
+app.use("/api/signup-request", signupRequestRouter);
 
 // Health
 app.get("/", (req, res) => {
