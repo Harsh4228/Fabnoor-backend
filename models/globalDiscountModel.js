@@ -11,6 +11,10 @@ const globalDiscountSchema = new mongoose.Schema({
         required: true,
         default: false,
     },
+    lowStockThreshold: {
+        type: Number,
+        default: 5,
+    },
     updatedAt: {
         type: Date,
         default: Date.now,

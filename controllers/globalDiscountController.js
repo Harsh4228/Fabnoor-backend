@@ -11,6 +11,7 @@ const getGlobalDiscount = async (req, res) => {
             globalDiscount = await globalDiscountModel.create({
                 discountPercentage: 0,
                 isActive: false,
+                lowStockThreshold: 5,
             });
         }
         res.json({ success: true, globalDiscount });
@@ -24,7 +25,7 @@ const getGlobalDiscount = async (req, res) => {
  */
 const updateGlobalDiscount = async (req, res) => {
     try {
-        const { discountPercentage, isActive } = req.body;
+        const { discountPercentage, isActive, lowStockThreshold } = req.body;
 
         let globalDiscount = await globalDiscountModel.findOne();
 
@@ -32,12 +33,15 @@ const updateGlobalDiscount = async (req, res) => {
             globalDiscount = new globalDiscountModel({
                 discountPercentage: Number(discountPercentage) || 0,
                 isActive: isActive === "true" || isActive === true,
+                lowStockThreshold: lowStockThreshold !== undefined ? Number(lowStockThreshold) : 5,
             });
         } else {
             globalDiscount.discountPercentage =
                 discountPercentage !== undefined ? Number(discountPercentage) : globalDiscount.discountPercentage;
             globalDiscount.isActive =
                 isActive !== undefined ? (isActive === "true" || isActive === true) : globalDiscount.isActive;
+            globalDiscount.lowStockThreshold =
+                lowStockThreshold !== undefined ? Number(lowStockThreshold) : globalDiscount.lowStockThreshold;
         }
 
         globalDiscount.updatedAt = Date.now();

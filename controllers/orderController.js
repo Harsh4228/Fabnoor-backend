@@ -834,6 +834,10 @@ const getDashboardStats = async (req, res) => {
     const validOrderQ = { status: { $ne: "Payment Pending" } };
     const deliveredQ  = { ...validOrderQ, status: "Delivered" };
 
+    // Fetch low-stock threshold from settings
+    const settings = await globalDiscountModel.findOne().lean();
+    const lowStockThreshold = settings?.lowStockThreshold ?? 5;
+
     const [
       totalProducts,
       totalUsers,
@@ -878,7 +882,7 @@ const getDashboardStats = async (req, res) => {
       orderModel.find(validOrderQ).sort({ createdAt: -1 }).limit(8).populate("userId", "name email"),
       productModel.aggregate([
         { $unwind: "$variants" },
-        { $match: { "variants.stock": { $gt: 0, $lt: 6 } } },
+        { $match: { "variants.stock": { $gt: 0, $lt: lowStockThreshold } } },
         { $project: { name: 1, "variants.color": 1, "variants.stock": 1, "variants.images": 1 } },
         { $limit: 5 },
       ]),
@@ -911,6 +915,7 @@ const getDashboardStats = async (req, res) => {
         recentOrders,
         lowStockProducts,
         monthlyChart,
+        lowStockThreshold,
       },
     });
   } catch (error) {
