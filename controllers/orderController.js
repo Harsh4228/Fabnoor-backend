@@ -1086,6 +1086,25 @@ const getDeliveredReport = async (req, res) => {
   }
 };
 
+/* =========================
+   ADMIN: PERMANENTLY DELETE ORDER
+========================= */
+const deleteOrder = async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    if (!orderId) return res.status(400).json({ success: false, message: "Order ID is required" });
+
+    const order = await orderModel.findById(orderId);
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+
+    await orderModel.findByIdAndDelete(orderId);
+    res.json({ success: true, message: "Order permanently deleted" });
+  } catch (error) {
+    console.error("deleteOrder error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export {
   placeOrder,
   placeOrderWhatsApp,
@@ -1099,6 +1118,7 @@ export {
   getWhatsAppSlip,
   getDashboardStats,
   getDeliveredReport,
+  deleteOrder,
 };
 
 /* =========================

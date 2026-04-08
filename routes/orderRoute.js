@@ -12,6 +12,7 @@ import {
   getWhatsAppSlip,
   getDashboardStats,
   getDeliveredReport,
+  deleteOrder,
 } from "../controllers/orderController.js";
 
 import authUser from "../middleware/auth.js";
@@ -24,6 +25,7 @@ const orderRouter = express.Router();
 orderRouter.post("/list", authUser, adminAuth, allOrders);
 orderRouter.post("/status", authUser, adminAuth, updateStatus);
 orderRouter.post("/paymentstatus", authUser, adminAuth, updatePaymentStatus);
+orderRouter.post("/delete", authUser, adminAuth, deleteOrder);
 orderRouter.get("/invoice/:orderId", authUser, adminAuth, getInvoice);
 orderRouter.get("/dashboard-stats", authUser, adminAuth, getDashboardStats);
 orderRouter.get("/report", authUser, adminAuth, getDeliveredReport);

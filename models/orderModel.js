@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import counterModel from "./counterModel.js";
 
 /**
  * =========================
@@ -158,12 +159,20 @@ const orderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Auto-generate a human-friendly orderNumber if not present
-orderSchema.pre("save", function (next) {
+// Auto-generate a sequential human-friendly orderNumber if not present
+orderSchema.pre("save", async function (next) {
   if (!this.orderNumber) {
-    const short = Math.random().toString(36).slice(2, 8).toUpperCase();
-    const time = Date.now().toString().slice(-6);
-    this.orderNumber = `ORD-${time}-${short}`;
+    try {
+      const counter = await counterModel.findOneAndUpdate(
+        { _id: "orderNumber" },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      const padded = String(counter.seq).padStart(5, "0");
+      this.orderNumber = `FBN-${padded}`;
+    } catch (err) {
+      return next(err);
+    }
   }
   next();
 });
