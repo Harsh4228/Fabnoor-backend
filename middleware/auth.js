@@ -64,3 +64,22 @@ const authUser = async (req, res, next) => {
 };
 
 export default authUser;
+
+export const optionalAuth = async (req, res, next) => {
+  try {
+    if (process.env.SKIP_DB === "true") return next();
+    
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.split(" ")[1];
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const user = await userModel.findById(decoded.id).select("-password");
+      if (user) {
+        req.user = user;
+      }
+    }
+  } catch (error) {
+    // Ignore errors for optional auth constraints
+  }
+  next();
+};

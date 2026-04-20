@@ -307,6 +307,16 @@ const listProducts = async (req, res) => {
     const products = result[0].data;
     const totalCount = result[0].metadata[0]?.totalCount || 0;
 
+    if (!req.user) {
+      products.forEach(p => {
+        if (p.variants) {
+          p.variants.forEach(v => {
+            v.price = 0;
+          });
+        }
+      });
+    }
+
     res.json({ success: true, products, totalCount });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -328,6 +338,11 @@ const singleProduct = async (req, res) => {
       ...product,
       variants: (product.variants || []).filter((v) => !v.hidden),
     };
+    if (!req.user) {
+      filtered.variants.forEach(v => {
+        v.price = 0;
+      });
+    }
     res.json({ success: true, product: filtered });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -346,6 +361,15 @@ const getProductsByIds = async (req, res) => {
       return res.status(400).json({ success: false, message: "Array of ids required" });
     }
     const products = await productModel.find({ _id: { $in: ids } }).lean();
+    if (!req.user) {
+      products.forEach(p => {
+        if (p.variants) {
+          p.variants.forEach(v => {
+            v.price = 0;
+          });
+        }
+      });
+    }
     res.json({ success: true, products });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

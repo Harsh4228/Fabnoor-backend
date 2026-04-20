@@ -12,7 +12,7 @@ import {
 } from "../controllers/productController.js";
 
 import upload from "../middleware/multer.js";
-import authUser from "../middleware/auth.js";
+import authUser, { optionalAuth } from "../middleware/auth.js";
 import adminAuth from "../middleware/adminAuth.js";
 
 const productRouter = express.Router();
@@ -64,9 +64,9 @@ productRouter.post(
  * PUBLIC ROUTES
  * =========================
  */
-productRouter.get("/list", listProducts);
+productRouter.get("/list", optionalAuth, listProducts);
 productRouter.get("/metadata", getProductMetadata);
-productRouter.post("/by-ids", getProductsByIds);
-productRouter.get("/:id", singleProduct);
+productRouter.post("/by-ids", optionalAuth, getProductsByIds);
+productRouter.get("/:id", optionalAuth, singleProduct);
 
 export default productRouter;

@@ -2,7 +2,7 @@ import validator from "validator";
 import bcrypt from "bcryptjs";
 import userModel from "../models/userModel.js";
 import signupRequestModel from "../models/signupRequestModel.js";
-import { sendWelcomeEmail } from "../config/emailService.js";
+import { sendWelcomeEmail, sendWelcomeWithPasswordEmail } from "../config/emailService.js";
 
 /* ======================================================
    POST /api/signup-request/create   (public – no auth)
@@ -61,7 +61,7 @@ export const getAllSignupRequests = async (req, res) => {
 ====================================================== */
 export const approveSignupRequest = async (req, res) => {
   try {
-    const { requestId, name, mobile, email, shopName, password } = req.body;
+    const { requestId, name, mobile, email, shopName, password, sendEmail } = req.body;
 
     if (!requestId) return res.json({ success: false, message: "requestId is required" });
     if (!shopName || !shopName.trim()) return res.json({ success: false, message: "Shop name is required" });
@@ -93,10 +93,15 @@ export const approveSignupRequest = async (req, res) => {
 
     await signupRequestModel.findByIdAndUpdate(requestId, { status: "approved" });
 
-    // Fire-and-forget welcome email
-    sendWelcomeEmail(user.email, user.name).catch(err =>
-      console.error("Welcome email failed:", err)
-    );
+    if (sendEmail) {
+      sendWelcomeWithPasswordEmail(user.email, user.name, password).catch(err =>
+        console.error("Welcome email with password failed:", err)
+      );
+    } else {
+      sendWelcomeEmail(user.email, user.name).catch(err =>
+        console.error("Welcome email failed:", err)
+      );
+    }
 
     return res.json({ success: true, message: `Account created for ${user.name}` });
   } catch (err) {

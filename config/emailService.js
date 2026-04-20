@@ -128,3 +128,37 @@ export const sendWelcomeEmail = async (toEmail, name) => {
     text: `Hi ${name}, Welcome to Fabnoor! We're thrilled to have you. Start shopping now at https://fabnoor.com`,
   });
 };
+
+// ── Welcome Email with Password ───────────────────────────────────────────────
+export const sendWelcomeWithPasswordEmail = async (toEmail, name, password) => {
+  return sendMail({
+    from: FROM(),
+    to: toEmail,
+    subject: "✨ Welcome to Fabnoor! - Your Account Details",
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;border:1px solid #f0e0e0;border-radius:12px;overflow:hidden;">
+        <div style="background:linear-gradient(135deg,#e91e8c,#f06292);padding:40px 24px;text-align:center;">
+          <h1 style="color:#fff;margin:0;font-size:28px;letter-spacing:1px;">✨ Welcome to Fabnoor</h1>
+        </div>
+        <div style="padding:32px;background-color:#ffffff;">
+          <p style="color:#333;font-size:18px;font-weight:bold;margin-top:0;">Hi ${name},</p>
+          <p style="color:#555;line-height:1.6;">Your wholesale account has been approved by our admin team! 💖</p>
+          <p style="color:#555;line-height:1.6;">You can now log in using the credentials below to view pricing and place orders:</p>
+          
+          <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:16px;margin:24px 0;">
+            <p style="margin:4px 0;"><strong>Email:</strong> ${toEmail}</p>
+            <p style="margin:4px 0;"><strong>Password:</strong> <span style="font-family:monospace;background:#efefef;padding:2px 6px;">${password}</span></p>
+          </div>
+          
+          <div style="text-align:center;margin:32px 0;">
+            <a href="https://fabnoor.com/login" style="background:#e91e8c;color:#fff;padding:14px 32px;text-decoration:none;border-radius:50px;font-weight:bold;display:inline-block;box-shadow:0 4px 15px rgba(233,30,140,0.3);">Login Now</a>
+          </div>
+
+          <p style="color:#888;font-size:14px;border-top:1px solid #eee;padding-top:20px;">We recommend changing your password after you log in.</p>
+          <p style="color:#999;font-size:12px;margin-bottom:0;">Happy shopping,<br><strong>Team Fabnoor</strong></p>
+        </div>
+      </div>
+    `,
+    text: `Hi ${name},\n\nYour Fabnoor account has been approved!\n\nEmail: ${toEmail}\nPassword: ${password}\n\nPlease login at https://fabnoor.com/login and change your password.\n\nTeam Fabnoor`,
+  });
+};
