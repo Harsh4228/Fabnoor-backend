@@ -275,33 +275,36 @@ const listProducts = async (req, res) => {
 
     pipeline.push({ $facet: facet });
 
-    // Strip hidden variants from each product after facet
-    const filterHiddenStage = {
-      $project: {
-        data: {
-          $map: {
-            input: "$data",
-            as: "product",
-            in: {
-              $mergeObjects: [
-                "$$product",
-                {
-                  variants: {
-                    $filter: {
-                      input: "$$product.variants",
-                      as: "v",
-                      cond: { $ne: ["$$v.hidden", true] },
+    // Strip hidden variants from each product after facet (skip for admin users)
+    const isAdmin = req.user && req.user.role === "admin";
+    if (!isAdmin) {
+      const filterHiddenStage = {
+        $project: {
+          data: {
+            $map: {
+              input: "$data",
+              as: "product",
+              in: {
+                $mergeObjects: [
+                  "$$product",
+                  {
+                    variants: {
+                      $filter: {
+                        input: "$$product.variants",
+                        as: "v",
+                        cond: { $ne: ["$$v.hidden", true] },
+                      },
                     },
                   },
-                },
-              ],
+                ],
+              },
             },
           },
+          metadata: 1,
         },
-        metadata: 1,
-      },
-    };
-    pipeline.push(filterHiddenStage);
+      };
+      pipeline.push(filterHiddenStage);
+    }
 
     const result = await productModel.aggregate(pipeline);
     const products = result[0].data;
