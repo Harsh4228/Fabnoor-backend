@@ -15,6 +15,7 @@ import categoryRouter from "./routes/categoryRoute.js";
 import heroRouter from "./routes/heroImageRoute.js";
 import pageImageRouter from "./routes/pageImageRoute.js";
 import signupRequestRouter from "./routes/signupRequestRoute.js";
+import whatsappRouter from "./routes/whatsappRoute.js";
 import cors from "cors";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -77,6 +78,7 @@ app.use("/api/category", categoryRouter);
 app.use("/api/hero", heroRouter);
 app.use("/api/page-images", pageImageRouter);
 app.use("/api/signup-request", signupRequestRouter);
+app.use("/api/whatsapp", whatsappRouter);
 
 // Health
 app.get("/", (req, res) => {
