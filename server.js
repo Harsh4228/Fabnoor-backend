@@ -17,6 +17,7 @@ import pageImageRouter from "./routes/pageImageRoute.js";
 import signupRequestRouter from "./routes/signupRequestRoute.js";
 import whatsappRouter from "./routes/whatsappRoute.js";
 import cors from "cors";
+import { initSocket } from "./config/socket.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,7 +50,14 @@ if (process.env.SKIP_DB === "true") {
 }
 
 // Middleware
-app.use(express.json());
+// `verify` captures the raw request bytes onto req.rawBody — needed to check
+// Meta's X-Hub-Signature-256 header on the WhatsApp webhook (HMAC must be
+// computed over the exact raw payload, not the re-serialized parsed object).
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  },
+}));
 
 // CORS headers must come BEFORE static files so browsers can load images/videos cross-origin
 app.use((req, res, next) => {
@@ -87,7 +95,11 @@ app.get("/", (req, res) => {
 
 const server = app.listen(port, "0.0.0.0", () => {
   console.log(`Server is running on http://0.0.0.0:${port}`);
-  
+
+  // Real-time push for the WhatsApp chat page (new messages / status updates)
+  initSocket(server);
+
+
   // ✅ Keep-alive self-ping to prevent Render free-tier from sleeping.
   const SELF_URL = process.env.RENDER_EXTERNAL_URL;
   if (SELF_URL) {
