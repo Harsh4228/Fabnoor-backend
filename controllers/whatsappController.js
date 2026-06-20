@@ -48,11 +48,57 @@ const sendTemplateMessage = async (to, templateName, customerName) => {
     );
 
     console.log(`[WA] Sent to ${formattedNumber}:`, response.data);
-    return { success: true };
+    return { success: true, waMessageId: response.data.messages[0].id, formattedMobile: formattedNumber };
   } catch (error) {
     const errData = error.response?.data?.error;
     console.error(`[WA] Failed:`, errData || error.message);
     return { success: false, error: errData?.message || error.message || "Unknown error" };
+  }
+};
+
+/* ── Template preview text (shown in chat thread) ───────── */
+const TEMPLATE_BODY = {
+  fabnoor_welcome_offer: (name) =>
+    `Hi ${name || "Customer"}, Welcome to Fabnoor! Explore our latest wholesale collection and get exclusive deals. Shop now!`,
+  hello_world: () => "Hello World! This is a test message from WhatsApp Business API.",
+};
+
+/* ── Save outbound broadcast message to chat history ─────── */
+const saveOutboundMessage = async (formattedMobile, name, templateName, waMessageId) => {
+  try {
+    const body =
+      (TEMPLATE_BODY[templateName]?.(name)) ||
+      `[Template: ${templateName}]`;
+
+    let conversation = await Conversation.findOne({ mobile: formattedMobile });
+    if (!conversation) {
+      conversation = await Conversation.create({
+        mobile: formattedMobile,
+        name: name || "",
+        lastMessage: body,
+        lastMessageAt: new Date(),
+        lastDirection: "out",
+      });
+    } else {
+      conversation.name = conversation.name || name || "";
+      conversation.lastMessage = body;
+      conversation.lastMessageAt = new Date();
+      conversation.lastDirection = "out";
+      await conversation.save();
+    }
+
+    await Message.create({
+      conversation: conversation._id,
+      mobile: formattedMobile,
+      direction: "out",
+      type: "template",
+      body,
+      waMessageId,
+      status: "sent",
+      timestamp: new Date(),
+    });
+  } catch (err) {
+    console.error("[saveOutboundMessage] error:", err.message);
   }
 };
 
@@ -411,6 +457,7 @@ export const broadcastStream = async (req, res) => {
       if (result.success) {
         sent.push({ name: name || "Customer", mobile: mobile.trim() });
         sendEvent({ type: "progress", progress: i + 1, total: list.length, status: "sent", contact: name || mobile.trim() });
+        await saveOutboundMessage(result.formattedMobile, name || "Customer", templateName, result.waMessageId);
       } else {
         failed.push({ name: name || "Customer", mobile: mobile.trim(), error: result.error });
         sendEvent({ type: "progress", progress: i + 1, total: list.length, status: "failed", contact: name || mobile.trim(), error: result.error });
@@ -463,8 +510,12 @@ export const broadcastMessage = async (req, res) => {
         continue;
       }
       const result = await sendTemplateMessage(mobile.trim(), templateName, name || "Customer");
-      if (result.success) sent.push({ name: name || "Customer", mobile: mobile.trim() });
-      else failed.push({ name: name || "Customer", mobile: mobile.trim(), error: result.error });
+      if (result.success) {
+        sent.push({ name: name || "Customer", mobile: mobile.trim() });
+        await saveOutboundMessage(result.formattedMobile, name || "Customer", templateName, result.waMessageId);
+      } else {
+        failed.push({ name: name || "Customer", mobile: mobile.trim(), error: result.error });
+      }
       await new Promise((r) => setTimeout(r, 200));
     }
 
