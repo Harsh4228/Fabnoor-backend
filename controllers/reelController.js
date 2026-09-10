@@ -1,35 +1,5 @@
 import Reel from "../models/Reel.js";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const deleteUploadedFile = (fileUrl) => {
-  if (!fileUrl) return;
-  try {
-    const parts = fileUrl.split("/uploads/");
-    if (parts.length < 2) return;
-    const filename = parts[parts.length - 1];
-    if (!filename) return;
-    const filePath = path.join(__dirname, "..", "uploads", filename);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-  } catch (e) {
-    console.error("Failed to delete uploaded file:", e.message);
-  }
-};
-
-// Build absolute URL for an uploaded file.
-// Priority: BACKEND_URL env var > X-Forwarded-Proto (nginx proxy) > req.protocol
-const buildFileUrl = (req, filename) => {
-  const base = process.env.BACKEND_URL
-    ? process.env.BACKEND_URL.replace(/\/$/, "")
-    : `${req.get("x-forwarded-proto") || req.protocol}://${req.get("host")}`;
-  return `${base}/uploads/${filename}`;
-};
+import { uploadLargeBufferToCloudinary, deleteFromCloudinaryByUrl } from "../config/cloudinary.js";
 
 /* =========================
    UPLOAD REEL (ADMIN)
@@ -45,8 +15,10 @@ export const uploadReel = async (req, res) => {
       return res.status(400).json({ message: "Video file is required" });
     }
 
-    const baseUrl = process.env.BACKEND_URL || "";
-    const videoUrl = buildFileUrl(req, req.file.filename);
+    const result = await uploadLargeBufferToCloudinary(req.file.buffer, {
+      folder: "fabnoor/reels",
+    });
+    const videoUrl = result.secure_url;
 
     const reel = await Reel.create({
       videoUrl,
@@ -117,9 +89,9 @@ export const deleteReel = async (req, res) => {
       });
     }
 
-    // Delete the video file from disk
+    // Delete the video file from Cloudinary
     if (reel.videoUrl) {
-      deleteUploadedFile(reel.videoUrl);
+      await deleteFromCloudinaryByUrl(reel.videoUrl, "video");
     }
 
     return res.status(200).json({

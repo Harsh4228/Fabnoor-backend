@@ -1,12 +1,7 @@
 import userModel from "../models/userModel.js";
 import productModel from "../models/productModel.js";
 import categoryModel from "../models/categoryModel.js";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { uploadBufferToCloudinary, deleteFromCloudinaryByUrl } from "../config/cloudinary.js";
 
 /* Canonical size order — used to normalise sizes before saving */
 const SIZE_ORDER = ["S","M","L","XL","XXL","XXXL","4XL","5XL","6XL","7XL","Free Size"];
@@ -20,29 +15,17 @@ const sortSizes = (sizes) =>
     return ai - bi;
   });
 
-// Build absolute URL for an uploaded file.
-// Priority: BACKEND_URL env var > X-Forwarded-Proto (nginx proxy) > req.protocol
-const buildFileUrl = (req, filename) => {
-  const base = process.env.BACKEND_URL
-    ? process.env.BACKEND_URL.replace(/\/$/, "")
-    : `${req.get("x-forwarded-proto") || req.protocol}://${req.get("host")}`;
-  return `${base}/uploads/${filename}`;
-};
-const deleteUploadedFile = (fileUrl) => {
-  if (!fileUrl) return;
-  try {
-    const parts = fileUrl.split("/uploads/");
-    if (parts.length < 2) return;
-    const filename = parts[parts.length - 1];
-    if (!filename) return;
-    const filePath = path.join(__dirname, "..", "uploads", filename);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-  } catch (e) {
-    console.error("Failed to delete uploaded file:", e.message);
-  }
-};
+// Uploads a set of in-memory files (from multer memoryStorage) to Cloudinary
+// and returns their secure URLs.
+const uploadVariantImages = (files) =>
+  Promise.all(
+    files.map(async (file) => {
+      const result = await uploadBufferToCloudinary(file.buffer, {
+        folder: "fabnoor/products",
+      });
+      return result.secure_url;
+    })
+  );
 
 /* ================= UTILS ================= */
 const safeKey = (val) =>
@@ -132,7 +115,7 @@ const addProduct = async (req, res) => {
           throw new Error(`Images required for ${color} (${fabric})`);
         }
 
-        const images = files.map((file) => buildFileUrl(req, file.filename));
+        const images = await uploadVariantImages(files);
 
         return {
           color,
@@ -387,10 +370,10 @@ const removeProduct = async (req, res) => {
     const product = await productModel.findById(id);
 
     if (product) {
-      // Delete all variant images from disk
+      // Delete all variant images from Cloudinary
       for (const variant of product.variants || []) {
         for (const imageUrl of variant.images || []) {
-          deleteUploadedFile(imageUrl);
+          await deleteFromCloudinaryByUrl(imageUrl, "image");
         }
       }
       await product.deleteOne();
@@ -480,13 +463,13 @@ const editProduct = async (req, res) => {
         const oldVariant = product.variants.find((v) => v.code === code);
         for (const oldUrl of (oldVariant?.images || [])) {
           if (!keepImages.includes(oldUrl)) {
-            deleteUploadedFile(oldUrl);
+            await deleteFromCloudinaryByUrl(oldUrl, "image");
           }
         }
 
         let images = keepImages;
         if (newFiles.length) {
-          const newUploadedImages = newFiles.map((file) => buildFileUrl(req, file.filename));
+          const newUploadedImages = await uploadVariantImages(newFiles);
           images = [...images, ...newUploadedImages];
         }
 

@@ -1,6 +1,7 @@
 import express from "express";
 import "dotenv/config";
 import connectDB from "./config/mongodb.js";
+import connectCloudinary from "./config/cloudinary.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import userRouter from "./routes/userRoute.js";
@@ -48,6 +49,7 @@ if (process.env.SKIP_DB === "true") {
 } else {
   connectDB();
 }
+connectCloudinary();
 
 // Middleware
 // `verify` captures the raw request bytes onto req.rawBody — needed to check
