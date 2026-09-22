@@ -121,7 +121,7 @@ const getProductReviews = async (req, res) => {
             return res.status(404).json({ success: false, message: "Product not found" });
         }
 
-        let reviews = product.reviews;
+        let reviews = product.reviews.filter((r) => !r.isDeleted);
 
         // Optional variant filter
         if (variantCode) {
@@ -162,9 +162,11 @@ const getAdminReviews = async (req, res) => {
             return res.status(404).json({ success: false, message: "Product not found" });
         }
 
+        const activeReviews = product.reviews.filter((r) => !r.isDeleted);
+
         // Group reviews by variant
         const grouped = {};
-        for (const review of product.reviews) {
+        for (const review of activeReviews) {
             const key = review.variantCode || review.variantColor || "General";
             if (!grouped[key]) grouped[key] = [];
             grouped[key].push(review);
@@ -173,7 +175,7 @@ const getAdminReviews = async (req, res) => {
         res.json({
             success: true,
             productName: product.name,
-            reviews: product.reviews.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
+            reviews: activeReviews.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
             grouped,
         });
     } catch (error) {
@@ -194,20 +196,23 @@ const getAllProductsWithReviews = async (req, res) => {
             .select("name reviews variants")
             .lean();
 
-        const result = products.map((p) => {
-            const avgRating =
-                p.reviews.length > 0
-                    ? p.reviews.reduce((sum, r) => sum + r.rating, 0) / p.reviews.length
-                    : 0;
-            return {
-                _id: p._id,
-                name: p.name,
-                variants: p.variants,
-                reviews: p.reviews.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
-                avgRating: Math.round(avgRating * 10) / 10,
-                total: p.reviews.length,
-            };
-        });
+        const result = products
+            .map((p) => {
+                const activeReviews = (p.reviews || []).filter((r) => !r.isDeleted);
+                const avgRating =
+                    activeReviews.length > 0
+                        ? activeReviews.reduce((sum, r) => sum + r.rating, 0) / activeReviews.length
+                        : 0;
+                return {
+                    _id: p._id,
+                    name: p.name,
+                    variants: p.variants,
+                    reviews: activeReviews.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
+                    avgRating: Math.round(avgRating * 10) / 10,
+                    total: activeReviews.length,
+                };
+            })
+            .filter((p) => p.total > 0);
 
         res.json({ success: true, products: result });
     } catch (error) {
@@ -217,7 +222,7 @@ const getAllProductsWithReviews = async (req, res) => {
 };
 
 /* =========================
-   DELETE A REVIEW (ADMIN)
+   DELETE A REVIEW (ADMIN, SOFT DELETE)
    DELETE /api/review/:productId/:reviewId
    Auth: admin
 ========================= */
@@ -230,17 +235,96 @@ const deleteReview = async (req, res) => {
             return res.status(404).json({ success: false, message: "Product not found" });
         }
 
-        const before = product.reviews.length;
-        product.reviews = product.reviews.filter((r) => r._id.toString() !== reviewId);
-
-        if (product.reviews.length === before) {
+        const review = product.reviews.id(reviewId);
+        if (!review || review.isDeleted) {
             return res.status(404).json({ success: false, message: "Review not found" });
         }
+
+        review.isDeleted = true;
+        review.deletedAt = new Date();
 
         await product.save();
         res.json({ success: true, message: "Review deleted" });
     } catch (error) {
         console.error("deleteReview error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+/* =========================
+   TRASH: LIST DELETED REVIEWS (ADMIN)
+   GET /api/review/admin/trash/list
+========================= */
+const listDeletedReviews = async (req, res) => {
+    try {
+        const products = await productModel
+            .find({ "reviews.isDeleted": true })
+            .select("name reviews")
+            .lean();
+
+        const result = products.flatMap((p) =>
+            (p.reviews || [])
+                .filter((r) => r.isDeleted)
+                .map((r) => ({ ...r, productId: p._id, productName: p.name }))
+        );
+
+        res.json({ success: true, reviews: result });
+    } catch (error) {
+        console.error("listDeletedReviews error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+/* =========================
+   TRASH: RESTORE A REVIEW (ADMIN)
+   POST /api/review/admin/trash/restore
+========================= */
+const restoreReview = async (req, res) => {
+    try {
+        const { productId, reviewId } = req.body;
+        const product = await productModel.findById(productId);
+        if (!product) {
+            return res.status(404).json({ success: false, message: "Product not found" });
+        }
+
+        const review = product.reviews.id(reviewId);
+        if (!review || !review.isDeleted) {
+            return res.status(404).json({ success: false, message: "Review not found in trash" });
+        }
+
+        review.isDeleted = false;
+        review.deletedAt = null;
+
+        await product.save();
+        res.json({ success: true, message: "Review restored" });
+    } catch (error) {
+        console.error("restoreReview error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+/* =========================
+   TRASH: PERMANENTLY DELETE A REVIEW (ADMIN)
+   POST /api/review/admin/trash/delete
+========================= */
+const permanentlyDeleteReview = async (req, res) => {
+    try {
+        const { productId, reviewId } = req.body;
+        const product = await productModel.findById(productId);
+        if (!product) {
+            return res.status(404).json({ success: false, message: "Product not found" });
+        }
+
+        const review = product.reviews.id(reviewId);
+        if (!review || !review.isDeleted) {
+            return res.status(404).json({ success: false, message: "Review not found in trash" });
+        }
+
+        product.reviews.pull(reviewId);
+        await product.save();
+        res.json({ success: true, message: "Review permanently deleted" });
+    } catch (error) {
+        console.error("permanentlyDeleteReview error:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -251,4 +335,7 @@ export {
     getAdminReviews,
     getAllProductsWithReviews,
     deleteReview,
+    listDeletedReviews,
+    restoreReview,
+    permanentlyDeleteReview,
 };

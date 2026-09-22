@@ -3,6 +3,9 @@ import {
   listPageImages,
   addPageImage,
   removePageImage,
+  listDeletedPageImages,
+  restorePageImage,
+  permanentlyDeletePageImage,
 } from "../controllers/pageImageController.js";
 import authUser from "../middleware/auth.js";
 import adminAuth from "../middleware/adminAuth.js";
@@ -19,5 +22,10 @@ pageImageRouter.post(
   addPageImage
 );
 pageImageRouter.post("/remove", authUser, adminAuth, removePageImage);
+
+// Trash / soft-delete management
+pageImageRouter.get("/trash/list", authUser, adminAuth, listDeletedPageImages);
+pageImageRouter.post("/trash/restore", authUser, adminAuth, restorePageImage);
+pageImageRouter.post("/trash/delete", authUser, adminAuth, permanentlyDeletePageImage);
 
 export default pageImageRouter;

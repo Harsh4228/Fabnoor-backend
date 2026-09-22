@@ -4,6 +4,9 @@ import {
   getAllReels,
   toggleLikeReel,
   deleteReel,
+  listDeletedReels,
+  restoreReel,
+  permanentlyDeleteReel,
 } from "../controllers/reelController.js";
 
 import authUser from "../middleware/auth.js";
@@ -29,5 +32,10 @@ router.put("/like/:id", authUser, toggleLikeReel);
 
 // Admin delete
 router.delete("/:id", authUser, adminAuth, deleteReel);
+
+// Trash / soft-delete management
+router.get("/trash/list", authUser, adminAuth, listDeletedReels);
+router.post("/trash/restore/:id", authUser, adminAuth, restoreReel);
+router.delete("/trash/:id", authUser, adminAuth, permanentlyDeleteReel);
 
 export default router;

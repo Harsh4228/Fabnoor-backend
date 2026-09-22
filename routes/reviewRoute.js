@@ -5,6 +5,9 @@ import {
     getAdminReviews,
     getAllProductsWithReviews,
     deleteReview,
+    listDeletedReviews,
+    restoreReview,
+    permanentlyDeleteReview,
 } from "../controllers/reviewController.js";
 
 import authUser from "../middleware/auth.js";
@@ -27,5 +30,10 @@ reviewRouter.get("/admin/all", authUser, adminAuth, getAllProductsWithReviews);
 reviewRouter.get("/admin/:productId", authUser, adminAuth, getAdminReviews);
 // Delete a specific review
 reviewRouter.delete("/admin/:productId/:reviewId", authUser, adminAuth, deleteReview);
+
+// Trash / soft-delete management
+reviewRouter.get("/admin/trash/list", authUser, adminAuth, listDeletedReviews);
+reviewRouter.post("/admin/trash/restore", authUser, adminAuth, restoreReview);
+reviewRouter.post("/admin/trash/delete", authUser, adminAuth, permanentlyDeleteReview);
 
 export default reviewRouter;

@@ -13,6 +13,9 @@ import {
   getDashboardStats,
   getDeliveredReport,
   deleteOrder,
+  listDeletedOrders,
+  restoreOrder,
+  permanentlyDeleteOrder,
 } from "../controllers/orderController.js";
 
 import authUser from "../middleware/auth.js";
@@ -29,6 +32,11 @@ orderRouter.post("/delete", authUser, adminAuth, deleteOrder);
 orderRouter.get("/invoice/:orderId", authUser, adminAuth, getInvoice);
 orderRouter.get("/dashboard-stats", authUser, adminAuth, getDashboardStats);
 orderRouter.get("/report", authUser, adminAuth, getDeliveredReport);
+
+// Trash / soft-delete management
+orderRouter.get("/trash/list", authUser, adminAuth, listDeletedOrders);
+orderRouter.post("/trash/restore", authUser, adminAuth, restoreOrder);
+orderRouter.post("/trash/delete", authUser, adminAuth, permanentlyDeleteOrder);
 
 /* ================= USER FEATURES ================= */
 

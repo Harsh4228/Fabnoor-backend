@@ -32,15 +32,52 @@ export const addHeroImage = async (req, res) => {
   }
 };
 
-// POST /api/hero/remove — admin only
+// POST /api/hero/remove — admin only (soft delete)
 export const removeHeroImage = async (req, res) => {
   try {
     const { id } = req.body;
     const image = await heroImageModel.findById(id);
     if (!image) return res.status(404).json({ success: false, message: "Image not found" });
-    await deleteFromCloudinaryByUrl(image.url, "image");
-    await heroImageModel.findByIdAndDelete(id);
+    // Cloudinary asset is kept so the image can be restored later.
+    await image.softDelete(req.user?._id);
     res.json({ success: true, message: "Hero image removed" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// GET /api/hero/trash/list — admin only
+export const listDeletedHeroImages = async (req, res) => {
+  try {
+    const images = await heroImageModel.find({ isDeleted: true }).sort({ deletedAt: -1 });
+    res.json({ success: true, images });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/hero/trash/restore — admin only
+export const restoreHeroImage = async (req, res) => {
+  try {
+    const { id } = req.body;
+    const image = await heroImageModel.findOne({ _id: id, isDeleted: true });
+    if (!image) return res.status(404).json({ success: false, message: "Image not found in trash" });
+    await image.restore();
+    res.json({ success: true, message: "Hero image restored", image });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/hero/trash/delete — admin only
+export const permanentlyDeleteHeroImage = async (req, res) => {
+  try {
+    const { id } = req.body;
+    const image = await heroImageModel.findOne({ _id: id, isDeleted: true });
+    if (!image) return res.status(404).json({ success: false, message: "Image not found in trash" });
+    await deleteFromCloudinaryByUrl(image.url, "image");
+    await image.deleteOne();
+    res.json({ success: true, message: "Hero image permanently deleted" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import softDeletePlugin from "../utils/softDeletePlugin.js";
 
 const reelSchema = new mongoose.Schema(
   {
@@ -25,4 +26,6 @@ const reelSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.model("Reel", reelSchema);
+reelSchema.plugin(softDeletePlugin);
+
+export default mongoose.models.Reel || mongoose.model("Reel", reelSchema);

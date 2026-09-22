@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import counterModel from "./counterModel.js";
+import softDeletePlugin from "../utils/softDeletePlugin.js";
 
 /**
  * =========================
@@ -176,6 +177,8 @@ orderSchema.pre("save", async function (next) {
   }
   next();
 });
+
+orderSchema.plugin(softDeletePlugin);
 
 /**
  * =========================

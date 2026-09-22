@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import softDeletePlugin from "../utils/softDeletePlugin.js";
 
 /**
  * Review Schema
@@ -41,6 +42,16 @@ const reviewSchema = new mongoose.Schema(
     createdAt: {
       type: Date,
       default: Date.now,
+    },
+    // Soft delete — reviews are subdocuments, so they're filtered manually
+    // in controllers rather than via the query-hook plugin.
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
     },
   },
   { _id: true }
@@ -154,6 +165,8 @@ const productSchema = new mongoose.Schema({
     default: 0,
   },
 });
+
+productSchema.plugin(softDeletePlugin);
 
 /**
  * Prevent OverwriteModelError

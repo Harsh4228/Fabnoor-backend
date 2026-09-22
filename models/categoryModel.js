@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import softDeletePlugin from "../utils/softDeletePlugin.js";
 
 const categorySchema = new mongoose.Schema({
     name: {
@@ -6,6 +7,12 @@ const categorySchema = new mongoose.Schema({
         required: true,
         unique: true,
         trim: true
+    },
+    // Original name kept when soft-deleted so the unique index doesn't block
+    // creating a new category with the same name while the old one is trashed.
+    originalName: {
+        type: String,
+        default: undefined,
     },
     subCategories: {
         type: [String],
@@ -16,6 +23,8 @@ const categorySchema = new mongoose.Schema({
         default: 1
     }
 }, { timestamps: true });
+
+categorySchema.plugin(softDeletePlugin);
 
 const categoryModel = mongoose.models.category || mongoose.model("category", categorySchema);
 

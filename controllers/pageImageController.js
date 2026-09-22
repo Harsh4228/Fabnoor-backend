@@ -29,11 +29,10 @@ export const addPageImage = async (req, res) => {
         .json({ success: false, message: 'page must be "about" or "contact"' });
     }
 
-    // Replace existing image for this page
+    // Replace existing image for this page (soft delete so it's restorable)
     const existing = await pageImageModel.findOne({ page });
     if (existing) {
-      await deleteFromCloudinaryByUrl(existing.url, "image");
-      await pageImageModel.findByIdAndDelete(existing._id);
+      await existing.softDelete(req.user?._id);
     }
 
     const result = await uploadBufferToCloudinary(req.file.buffer, {
@@ -50,7 +49,7 @@ export const addPageImage = async (req, res) => {
   }
 };
 
-// POST /api/page-images/remove — admin only
+// POST /api/page-images/remove — admin only (soft delete)
 export const removePageImage = async (req, res) => {
   try {
     const { id } = req.body;
@@ -59,9 +58,46 @@ export const removePageImage = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Image not found" });
-    await deleteFromCloudinaryByUrl(image.url, "image");
-    await pageImageModel.findByIdAndDelete(id);
+    // Cloudinary asset is kept so the image can be restored later.
+    await image.softDelete(req.user?._id);
     res.json({ success: true, message: "Page image removed" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// GET /api/page-images/trash/list — admin only
+export const listDeletedPageImages = async (req, res) => {
+  try {
+    const images = await pageImageModel.find({ isDeleted: true }).sort({ deletedAt: -1 });
+    res.json({ success: true, images });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/page-images/trash/restore — admin only
+export const restorePageImage = async (req, res) => {
+  try {
+    const { id } = req.body;
+    const image = await pageImageModel.findOne({ _id: id, isDeleted: true });
+    if (!image) return res.status(404).json({ success: false, message: "Image not found in trash" });
+    await image.restore();
+    res.json({ success: true, message: "Page image restored", image });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/page-images/trash/delete — admin only
+export const permanentlyDeletePageImage = async (req, res) => {
+  try {
+    const { id } = req.body;
+    const image = await pageImageModel.findOne({ _id: id, isDeleted: true });
+    if (!image) return res.status(404).json({ success: false, message: "Image not found in trash" });
+    await deleteFromCloudinaryByUrl(image.url, "image");
+    await image.deleteOne();
+    res.json({ success: true, message: "Page image permanently deleted" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

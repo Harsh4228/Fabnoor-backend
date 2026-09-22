@@ -1,5 +1,6 @@
 // models/userModel.js
 import mongoose from "mongoose";
+import softDeletePlugin from "../utils/softDeletePlugin.js";
 
 const wishlistSchema = new mongoose.Schema(
   {
@@ -46,11 +47,17 @@ const userSchema = new mongoose.Schema(
       default: "user",
     },
 
+    // Kept when soft-deleted so the unique index on `email` doesn't block a
+    // new signup with the same address while the old account is trashed.
+    originalEmail: { type: String, default: undefined },
+
     resetOtp: { type: String, default: "" },
     resetOtpExpireAt: { type: Number, default: 0 },
   },
   { minimize: false, timestamps: true }
 );
+
+userSchema.plugin(softDeletePlugin);
 
 const userModel =
   mongoose.models.user || mongoose.model("user", userSchema);

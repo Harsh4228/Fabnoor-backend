@@ -272,17 +272,78 @@ const getUserFullDetails = async (req, res) => {
   }
 };
 
-/* ================= DELETE USER (ADMIN) ================= */
+/* ================= DELETE USER (ADMIN, SOFT DELETE) ================= */
 const deleteUser = async (req, res) => {
   try {
     const { id } = req.body;
-    const user = await userModel.findByIdAndDelete(id);
+    const user = await userModel.findById(id);
 
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
+    // Free up the unique `email` so a new signup can reuse it while trashed.
+    user.originalEmail = user.originalEmail || user.email;
+    user.email = `deleted_${Date.now()}_${user.email}`;
+    await user.softDelete(req.user?._id);
+
     res.json({ success: true, message: "User deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/* ================= TRASH: LIST DELETED USERS (ADMIN) ================= */
+const listDeletedUsers = async (req, res) => {
+  try {
+    const users = await userModel
+      .find({ isDeleted: true })
+      .select("-password")
+      .sort({ deletedAt: -1 });
+    res.json({ success: true, users });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/* ================= TRASH: RESTORE USER (ADMIN) ================= */
+const restoreUser = async (req, res) => {
+  try {
+    const { id } = req.body;
+    const user = await userModel.findOne({ _id: id, isDeleted: true });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found in trash" });
+    }
+
+    const restoredEmail = user.originalEmail || user.email;
+    const clash = await userModel.findOne({ email: restoredEmail, _id: { $ne: user._id } });
+    if (clash) {
+      return res.status(409).json({
+        success: false,
+        message: `Cannot restore: email "${restoredEmail}" is already in use by another account.`,
+      });
+    }
+
+    user.email = restoredEmail;
+    user.originalEmail = undefined;
+    await user.restore();
+
+    res.json({ success: true, message: "User restored" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/* ================= TRASH: PERMANENTLY DELETE USER (ADMIN) ================= */
+const permanentlyDeleteUser = async (req, res) => {
+  try {
+    const { id } = req.body;
+    const user = await userModel.findOne({ _id: id, isDeleted: true });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found in trash" });
+    }
+    await user.deleteOne();
+    res.json({ success: true, message: "User permanently deleted" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -442,4 +503,4 @@ const resetPassword = async (req, res) => {
   }
 };
 
-export { loginUser, registerUser, adminLogin, getProfile, updateProfile, getAllUsers, getUserFullDetails, deleteUser, makeAdmin, removeAdmin, requestResetOtp, resetPassword };
+export { loginUser, registerUser, adminLogin, getProfile, updateProfile, getAllUsers, getUserFullDetails, deleteUser, makeAdmin, removeAdmin, requestResetOtp, resetPassword, listDeletedUsers, restoreUser, permanentlyDeleteUser };

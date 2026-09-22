@@ -9,6 +9,9 @@ import {
   getProductMetadata,
   updateVariantQuick,
   toggleVariantHidden,
+  listDeletedProducts,
+  restoreProduct,
+  permanentlyDeleteProduct,
 } from "../controllers/productController.js";
 
 import upload from "../middleware/multer.js";
@@ -58,6 +61,11 @@ productRouter.post(
   adminAuth,
   toggleVariantHidden
 );
+
+// Trash / soft-delete management
+productRouter.get("/trash/list", authUser, adminAuth, listDeletedProducts);
+productRouter.post("/trash/restore", authUser, adminAuth, restoreProduct);
+productRouter.post("/trash/delete", authUser, adminAuth, permanentlyDeleteProduct);
 
 /**
  * =========================

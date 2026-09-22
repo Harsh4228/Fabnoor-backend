@@ -198,6 +198,8 @@ const listProducts = async (req, res) => {
     }
 
     let pipeline = [];
+    // Aggregation bypasses the soft-delete query hook, so exclude explicitly.
+    pipeline.push({ $match: { isDeleted: { $ne: true } } });
     if (Object.keys(query).length > 0) {
       pipeline.push({ $match: query });
     }
@@ -361,7 +363,7 @@ const getProductMetadata = async (req, res) => {
 
 /**
  * =========================
- * REMOVE PRODUCT
+ * REMOVE PRODUCT (SOFT DELETE)
  * =========================
  */
 const removeProduct = async (req, res) => {
@@ -370,13 +372,9 @@ const removeProduct = async (req, res) => {
     const product = await productModel.findById(id);
 
     if (product) {
-      // Delete all variant images from Cloudinary
-      for (const variant of product.variants || []) {
-        for (const imageUrl of variant.images || []) {
-          await deleteFromCloudinaryByUrl(imageUrl, "image");
-        }
-      }
-      await product.deleteOne();
+      // Cloudinary images are kept so the product can be fully restored later;
+      // they're only cleaned up on permanent delete.
+      await product.softDelete(req.user?._id);
     }
 
     // Cleanup wishlist for all users
@@ -386,6 +384,67 @@ const removeProduct = async (req, res) => {
     );
 
     res.json({ success: true, message: "Product removed" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * =========================
+ * TRASH: LIST DELETED PRODUCTS (ADMIN)
+ * =========================
+ */
+const listDeletedProducts = async (req, res) => {
+  try {
+    const products = await productModel
+      .find({ isDeleted: true })
+      .sort({ deletedAt: -1 });
+    res.json({ success: true, products });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * =========================
+ * TRASH: RESTORE PRODUCT (ADMIN)
+ * =========================
+ */
+const restoreProduct = async (req, res) => {
+  try {
+    const { id } = req.body;
+    const product = await productModel.findOne({ _id: id, isDeleted: true });
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product not found in trash" });
+    }
+    await product.restore();
+    res.json({ success: true, message: "Product restored", product });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * =========================
+ * TRASH: PERMANENTLY DELETE PRODUCT (ADMIN)
+ * =========================
+ */
+const permanentlyDeleteProduct = async (req, res) => {
+  try {
+    const { id } = req.body;
+    const product = await productModel.findOne({ _id: id, isDeleted: true });
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product not found in trash" });
+    }
+
+    for (const variant of product.variants || []) {
+      for (const imageUrl of variant.images || []) {
+        await deleteFromCloudinaryByUrl(imageUrl, "image");
+      }
+    }
+    await product.deleteOne();
+
+    res.json({ success: true, message: "Product permanently deleted" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -573,5 +632,8 @@ export {
   getProductMetadata,
   updateVariantQuick,
   toggleVariantHidden,
+  listDeletedProducts,
+  restoreProduct,
+  permanentlyDeleteProduct,
 };
 

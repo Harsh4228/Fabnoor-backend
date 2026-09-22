@@ -42,7 +42,7 @@ const listCategories = async (req, res) => {
     }
 };
 
-// Remove Category
+// Remove Category (soft delete)
 const removeCategory = async (req, res) => {
     try {
         const { id } = req.body;
@@ -60,8 +60,68 @@ const removeCategory = async (req, res) => {
             });
         }
 
-        await categoryModel.findByIdAndDelete(id);
+        // Free up the unique `name` so a new category can reuse it while this one is trashed.
+        category.originalName = category.originalName || category.name;
+        category.name = `deleted_${Date.now()}_${category.name}`;
+        await category.softDelete(req.user?._id);
+
         res.json({ success: true, message: "Category removed" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Trash: list deleted categories (admin)
+const listDeletedCategories = async (req, res) => {
+    try {
+        const categories = await categoryModel.find({ isDeleted: true }).sort({ deletedAt: -1 });
+        res.json({ success: true, categories });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Trash: restore a category (admin)
+const restoreCategory = async (req, res) => {
+    try {
+        const { id } = req.body;
+        const category = await categoryModel.findOne({ _id: id, isDeleted: true });
+        if (!category) {
+            return res.status(404).json({ success: false, message: "Category not found in trash" });
+        }
+
+        const restoredName = category.originalName || category.name;
+        const clash = await categoryModel.findOne({ name: restoredName, _id: { $ne: category._id } });
+        if (clash) {
+            return res.status(409).json({
+                success: false,
+                message: `Cannot restore: a category named "${restoredName}" already exists.`,
+            });
+        }
+
+        category.name = restoredName;
+        category.originalName = undefined;
+        await category.restore();
+
+        res.json({ success: true, message: "Category restored", category });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Trash: permanently delete a category (admin)
+const permanentlyDeleteCategory = async (req, res) => {
+    try {
+        const { id } = req.body;
+        const category = await categoryModel.findOne({ _id: id, isDeleted: true });
+        if (!category) {
+            return res.status(404).json({ success: false, message: "Category not found in trash" });
+        }
+        await category.deleteOne();
+        res.json({ success: true, message: "Category permanently deleted" });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: error.message });
@@ -159,5 +219,8 @@ export {
     removeCategory,
     updateCategory,
     addSubCategory,
-    removeSubCategory
+    removeSubCategory,
+    listDeletedCategories,
+    restoreCategory,
+    permanentlyDeleteCategory,
 };

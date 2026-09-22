@@ -831,7 +831,7 @@ const getDashboardStats = async (req, res) => {
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
-    const validOrderQ = { status: { $ne: "Payment Pending" } };
+    const validOrderQ = { status: { $ne: "Payment Pending" }, isDeleted: { $ne: true } };
     const deliveredQ  = { ...validOrderQ, status: "Delivered" };
 
     // Fetch low-stock threshold from settings
@@ -881,6 +881,7 @@ const getDashboardStats = async (req, res) => {
       ]),
       orderModel.find(validOrderQ).sort({ createdAt: -1 }).limit(8).populate("userId", "name email"),
       productModel.aggregate([
+        { $match: { isDeleted: { $ne: true } } },
         { $unwind: "$variants" },
         { $match: { "variants.stock": { $gt: 0, $lt: lowStockThreshold } } },
         { $project: { name: 1, "variants.color": 1, "variants.stock": 1, "variants.images": 1 } },
@@ -1087,7 +1088,7 @@ const getDeliveredReport = async (req, res) => {
 };
 
 /* =========================
-   ADMIN: PERMANENTLY DELETE ORDER
+   ADMIN: SOFT DELETE ORDER
 ========================= */
 const deleteOrder = async (req, res) => {
   try {
@@ -1097,10 +1098,56 @@ const deleteOrder = async (req, res) => {
     const order = await orderModel.findById(orderId);
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
 
-    await orderModel.findByIdAndDelete(orderId);
-    res.json({ success: true, message: "Order permanently deleted" });
+    await order.softDelete(req.user?._id);
+    res.json({ success: true, message: "Order removed" });
   } catch (error) {
     console.error("deleteOrder error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/* =========================
+   ADMIN TRASH: LIST DELETED ORDERS
+========================= */
+const listDeletedOrders = async (req, res) => {
+  try {
+    const orders = await orderModel
+      .find({ isDeleted: true })
+      .populate("userId", "-password")
+      .sort({ deletedAt: -1 });
+    res.json({ success: true, orders });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/* =========================
+   ADMIN TRASH: RESTORE ORDER
+========================= */
+const restoreOrder = async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    const order = await orderModel.findOne({ _id: orderId, isDeleted: true });
+    if (!order) return res.status(404).json({ success: false, message: "Order not found in trash" });
+    await order.restore();
+    res.json({ success: true, message: "Order restored", order });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/* =========================
+   ADMIN TRASH: PERMANENTLY DELETE ORDER
+========================= */
+const permanentlyDeleteOrder = async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    const order = await orderModel.findOne({ _id: orderId, isDeleted: true });
+    if (!order) return res.status(404).json({ success: false, message: "Order not found in trash" });
+    await order.deleteOne();
+    res.json({ success: true, message: "Order permanently deleted" });
+  } catch (error) {
+    console.error("permanentlyDeleteOrder error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -1119,6 +1166,9 @@ export {
   getDashboardStats,
   getDeliveredReport,
   deleteOrder,
+  listDeletedOrders,
+  restoreOrder,
+  permanentlyDeleteOrder,
 };
 
 /* =========================

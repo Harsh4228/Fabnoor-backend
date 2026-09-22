@@ -1,5 +1,5 @@
 import express from 'express';
-import { loginUser, registerUser, adminLogin, getProfile, updateProfile, getAllUsers, getUserFullDetails, deleteUser, makeAdmin, removeAdmin, requestResetOtp, resetPassword } from '../controllers/userController.js';
+import { loginUser, registerUser, adminLogin, getProfile, updateProfile, getAllUsers, getUserFullDetails, deleteUser, makeAdmin, removeAdmin, requestResetOtp, resetPassword, listDeletedUsers, restoreUser, permanentlyDeleteUser } from '../controllers/userController.js';
 import authUser from '../middleware/auth.js';
 import adminAuth from '../middleware/adminAuth.js';
 const router = express.Router()
@@ -26,5 +26,10 @@ userRouter.get("/admin/user/:id", authUser, adminAuth, getUserFullDetails);
 userRouter.post("/admin/delete-user", authUser, adminAuth, deleteUser);
 userRouter.post("/admin/make-admin", authUser, adminAuth, makeAdmin);
 userRouter.post("/admin/remove-admin", authUser, adminAuth, removeAdmin);
+
+// Trash / soft-delete management
+userRouter.get("/admin/trash/list", authUser, adminAuth, listDeletedUsers);
+userRouter.post("/admin/trash/restore", authUser, adminAuth, restoreUser);
+userRouter.post("/admin/trash/delete", authUser, adminAuth, permanentlyDeleteUser);
 
 export default userRouter;

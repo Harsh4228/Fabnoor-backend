@@ -80,7 +80,7 @@ export const deleteReel = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const reel = await Reel.findByIdAndDelete(id);
+    const reel = await Reel.findById(id);
 
     if (!reel) {
       return res.status(404).json({
@@ -89,10 +89,9 @@ export const deleteReel = async (req, res) => {
       });
     }
 
-    // Delete the video file from Cloudinary
-    if (reel.videoUrl) {
-      await deleteFromCloudinaryByUrl(reel.videoUrl, "video");
-    }
+    // Cloudinary video is kept so the reel can be restored later; it's only
+    // cleaned up on permanent delete.
+    await reel.softDelete(req.user?._id);
 
     return res.status(200).json({
       success: true,
@@ -103,5 +102,56 @@ export const deleteReel = async (req, res) => {
       success: false,
       message: "Server error",
     });
+  }
+};
+
+/* =========================
+   TRASH: LIST DELETED REELS (ADMIN)
+========================= */
+export const listDeletedReels = async (req, res) => {
+  try {
+    const reels = await Reel.find({ isDeleted: true }).sort({ deletedAt: -1 });
+    return res.status(200).json(reels);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+/* =========================
+   TRASH: RESTORE REEL (ADMIN)
+========================= */
+export const restoreReel = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const reel = await Reel.findOne({ _id: id, isDeleted: true });
+    if (!reel) {
+      return res.status(404).json({ success: false, message: "Reel not found in trash" });
+    }
+    await reel.restore();
+    return res.status(200).json({ success: true, message: "Reel restored", reel });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/* =========================
+   TRASH: PERMANENTLY DELETE REEL (ADMIN)
+========================= */
+export const permanentlyDeleteReel = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const reel = await Reel.findOne({ _id: id, isDeleted: true });
+    if (!reel) {
+      return res.status(404).json({ success: false, message: "Reel not found in trash" });
+    }
+
+    if (reel.videoUrl) {
+      await deleteFromCloudinaryByUrl(reel.videoUrl, "video");
+    }
+    await reel.deleteOne();
+
+    return res.status(200).json({ success: true, message: "Reel permanently deleted" });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
