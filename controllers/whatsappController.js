@@ -10,6 +10,24 @@ dotenv.config();
 
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000; // WhatsApp's 24h customer service window
 
+// Normalizes any admin-entered mobile into the same wa_id format Meta reports
+// back on inbound webhooks (e.g. "919876543210"). Without this, a broadcast
+// sent to a loosely-formatted number (leading 0, missing country code, etc.)
+// creates a Conversation under a different `mobile` string than the one the
+// customer's reply arrives under — the reply then lands in a brand-new
+// conversation instead of the existing thread, so it looks like it "never
+// shows up" in the chat the admin is actually looking at.
+const normalizeIndianMobile = (raw) => {
+  let digits = (raw || "").replace(/[^0-9]/g, "");
+  if (digits.length === 11 && digits.startsWith("0")) {
+    digits = digits.slice(1); // drop a leading trunk "0"
+  }
+  if (digits.length === 10) {
+    digits = `91${digits}`; // bare local number — add the India country code
+  }
+  return digits;
+};
+
 /* ── Send a single template message ────────────────────── */
 const sendTemplateMessage = async (to, templateName, customerName) => {
   try {
@@ -18,8 +36,7 @@ const sendTemplateMessage = async (to, templateName, customerName) => {
 
     if (!token || !phoneId) return { success: false, error: "Missing credentials" };
 
-    const cleanNumber = to.replace(/[^0-9]/g, "");
-    const formattedNumber = cleanNumber.length === 10 ? `91${cleanNumber}` : cleanNumber;
+    const formattedNumber = normalizeIndianMobile(to);
 
     const isHelloWorld = templateName === "hello_world";
 
@@ -106,7 +123,7 @@ const saveOutboundMessage = async (formattedMobile, name, templateName, waMessag
 const deduplicateContacts = (contacts) => {
   const seen = new Set();
   return contacts.filter((c) => {
-    const key = c.mobile?.replace(/[^0-9]/g, "");
+    const key = normalizeIndianMobile(c.mobile);
     if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -230,6 +247,11 @@ const handleIncomingMessage = async (value, msg) => {
     message,
     unreadCount: conversation.unreadCount,
   });
+
+  console.log(
+    `[webhook] saved inbound message from ${mobile} (conversation ${conversation._id}), ` +
+    `socket clients notified: ${getIO()?.engine?.clientsCount ?? "io not initialized"}`
+  );
 };
 
 /* ── Handle a delivery/read/failed status update for a message we sent ── */
@@ -242,7 +264,12 @@ const handleStatusUpdate = async (status) => {
 export const receiveWebhook = async (req, res) => {
   const secretConfigured = !!process.env.WHATSAPP_APP_SECRET;
   if (secretConfigured && !verifySignature(req)) {
-    console.warn("[webhook] Invalid signature — rejecting payload");
+    console.warn(
+      "[webhook] Invalid signature — rejecting payload. " +
+      `(x-hub-signature-256 header present: ${!!req.headers["x-hub-signature-256"]}, ` +
+      `rawBody captured: ${!!req.rawBody}). If this happens for every webhook call, ` +
+      "WHATSAPP_APP_SECRET likely doesn't match the Meta App Secret currently in use."
+    );
     return res.sendStatus(401);
   }
   if (!secretConfigured) {
@@ -254,6 +281,9 @@ export const receiveWebhook = async (req, res) => {
 
   try {
     const entries = req.body?.entry || [];
+    if (!entries.length) {
+      console.warn("[webhook] received payload with no entries:", JSON.stringify(req.body));
+    }
     for (const entry of entries) {
       for (const change of entry.changes || []) {
         const value = change.value;
