@@ -201,6 +201,15 @@ const handleIncomingMessage = async (value, msg) => {
   const mobile = msg.from;
   const type = msg.type;
 
+  // Meta retries webhook delivery aggressively on any slow/non-200 response —
+  // without this guard a retry would insert the same message twice and
+  // double-count unreadCount.
+  const alreadyProcessed = await Message.findOne({ waMessageId: msg.id }).select("_id").lean();
+  if (alreadyProcessed) {
+    console.log(`[webhook] duplicate delivery for waMessageId=${msg.id} — skipping`);
+    return;
+  }
+
   let body = "";
   if (type === "text") body = msg.text?.body || "";
   else if (type === "image") body = msg.image?.caption || "[Image]";
@@ -212,13 +221,16 @@ const handleIncomingMessage = async (value, msg) => {
   const profileName = value.contacts?.[0]?.profile?.name;
   const now = new Date();
 
-  let conversation = await Conversation.findOne({ mobile });
-  if (!conversation) {
-    conversation = await Conversation.create({
-      mobile,
-      name: await resolveCustomerName(mobile, profileName),
-    });
-  } else if (!conversation.name && profileName) {
+  // Upsert atomically — two near-simultaneous first messages from the same
+  // new contact would otherwise both try to `create()` and collide on the
+  // unique `mobile` index.
+  let conversation = await Conversation.findOneAndUpdate(
+    { mobile },
+    { $setOnInsert: { mobile, name: await resolveCustomerName(mobile, profileName) } },
+    { new: true, upsert: true }
+  );
+
+  if (!conversation.name && profileName) {
     conversation.name = profileName;
   }
 
