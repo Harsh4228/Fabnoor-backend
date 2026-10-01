@@ -6,6 +6,15 @@ import BroadcastLog from "../models/BroadcastLog.js";
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import { getIO } from "../config/socket.js";
+import { uploadBufferToCloudinary } from "../config/cloudinary.js";
+import {
+  fetchApprovedTemplates,
+  findTemplate,
+  analyzeTemplate,
+  validateParams,
+  buildComponents,
+  renderTemplateText,
+} from "../config/whatsappTemplates.js";
 dotenv.config();
 
 const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000; // WhatsApp's 24h customer service window
@@ -29,7 +38,10 @@ const normalizeIndianMobile = (raw) => {
 };
 
 /* ── Send a single template message ────────────────────── */
-const sendTemplateMessage = async (to, templateName, customerName) => {
+// `tpl` is the template definition fetched from Meta; `params` are the values
+// the admin filled in the panel. The payload is built generically from the
+// template itself, so any newly approved template works without code changes.
+const sendTemplateMessage = async (to, tpl, params, contact) => {
   try {
     const token = process.env.WHATSAPP_TOKEN;
     const phoneId = process.env.WHATSAPP_PHONE_ID;
@@ -38,25 +50,12 @@ const sendTemplateMessage = async (to, templateName, customerName) => {
 
     const formattedNumber = normalizeIndianMobile(to);
 
-    const isHelloWorld = templateName === "hello_world";
-
     const templatePayload = {
-      name: templateName,
-      language: { code: isHelloWorld ? "en_US" : "en" },
+      name: tpl.name,
+      language: { code: tpl.language },
     };
-
-    if (!isHelloWorld) {
-      const headerImageUrl = process.env.WHATSAPP_HEADER_IMAGE_URL;
-      templatePayload.components = [
-        ...(headerImageUrl
-          ? [{ type: "header", parameters: [{ type: "image", image: { link: headerImageUrl } }] }]
-          : []),
-        {
-          type: "body",
-          parameters: [{ type: "text", parameter_name: "customer_name", text: customerName || "Customer" }],
-        },
-      ];
-    }
+    const components = buildComponents(tpl, params, contact);
+    if (components.length) templatePayload.components = components;
 
     const response = await axios.post(
       `https://graph.facebook.com/v19.0/${phoneId}/messages`,
@@ -69,24 +68,17 @@ const sendTemplateMessage = async (to, templateName, customerName) => {
   } catch (error) {
     const errData = error.response?.data?.error;
     console.error(`[WA] Failed:`, errData || error.message);
-    return { success: false, error: errData?.message || error.message || "Unknown error" };
+    const detail = errData?.error_data?.details;
+    return {
+      success: false,
+      error: (errData?.message || error.message || "Unknown error") + (detail ? ` — ${detail}` : ""),
+    };
   }
 };
 
-/* ── Template preview text (shown in chat thread) ───────── */
-const TEMPLATE_BODY = {
-  fabnoor_welcome_offer: (name) =>
-    `Hi ${name || "Customer"}, Welcome to Fabnoor! Explore our latest wholesale collection and get exclusive deals. Shop now!`,
-  hello_world: () => "Hello World! This is a test message from WhatsApp Business API.",
-};
-
 /* ── Save outbound broadcast message to chat history ─────── */
-const saveOutboundMessage = async (formattedMobile, name, templateName, waMessageId) => {
+const saveOutboundMessage = async (formattedMobile, name, body, waMessageId) => {
   try {
-    const body =
-      (TEMPLATE_BODY[templateName]?.(name)) ||
-      `[Template: ${templateName}]`;
-
     let conversation = await Conversation.findOne({ mobile: formattedMobile });
     if (!conversation) {
       conversation = await Conversation.create({
@@ -117,6 +109,37 @@ const saveOutboundMessage = async (formattedMobile, name, templateName, waMessag
   } catch (err) {
     console.error("[saveOutboundMessage] error:", err.message);
   }
+};
+
+/* ── Load + validate the template a broadcast/test asks for ── */
+// Returns { tpl } or { error }. Validating once up front means a missing
+// value fails the whole send instead of producing 500 identical Meta errors.
+const loadTemplateForSend = async ({ templateName, language, params }) => {
+  if (!templateName) return { error: "Template name is required" };
+  let tpl;
+  try {
+    tpl = await findTemplate(templateName, language);
+  } catch (err) {
+    return { error: `Could not load templates from Meta: ${err.response?.data?.error?.message || err.message}` };
+  }
+  if (!tpl) return { error: `Template "${templateName}" (${language || "any language"}) is not approved on Meta` };
+  const problem = validateParams(analyzeTemplate(tpl), params || {});
+  if (problem) return { error: problem };
+  return { tpl };
+};
+
+/* ── Send to one contact + record it in chat history ── */
+const sendToContact = async (tpl, params, contact) => {
+  const name = contact.name || "Customer";
+  const mobile = (contact.mobile || "").trim();
+  if (!mobile) return { success: false, name: contact.name || "Unknown", mobile: "", error: "Missing mobile number" };
+
+  const result = await sendTemplateMessage(mobile, tpl, params, { name, mobile });
+  if (result.success) {
+    const body = renderTemplateText(tpl, params, { name, mobile });
+    await saveOutboundMessage(result.formattedMobile, name, body, result.waMessageId);
+  }
+  return { ...result, name, mobile };
 };
 
 /* ── Deduplicate by mobile number ───────────────────────── */
@@ -455,6 +478,58 @@ export const getBroadcastHistoryDetail = async (req, res) => {
   }
 };
 
+/* ── GET /api/whatsapp/templates — approved templates + the inputs each needs ── */
+export const getTemplates = async (req, res) => {
+  try {
+    const raw = await fetchApprovedTemplates({ refresh: req.query.refresh === "1" });
+    const templates = raw.map(analyzeTemplate).sort((a, b) => a.name.localeCompare(b.name));
+    return res.json({ success: true, templates });
+  } catch (error) {
+    const msg = error.response?.data?.error?.message || error.message;
+    console.error("[getTemplates] error:", msg);
+    return res.status(502).json({ success: false, message: msg });
+  }
+};
+
+/* ── POST /api/whatsapp/template-media — upload a header image/video/PDF ── */
+export const uploadTemplateMedia = async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: "No file uploaded" });
+    const mime = req.file.mimetype;
+    // PDFs go up as "raw": Cloudinary blocks PDF delivery from the image pipeline by default.
+    const resourceType = mime.startsWith("video/") ? "video" : mime.startsWith("image/") ? "image" : "raw";
+    const result = await uploadBufferToCloudinary(req.file.buffer, {
+      resource_type: resourceType,
+      folder: "whatsapp_templates",
+      ...(resourceType === "raw"
+        ? { public_id: `${Date.now()}_${req.file.originalname.replace(/[^A-Za-z0-9._-]/g, "_")}` }
+        : {}),
+    });
+    return res.json({ success: true, url: result.secure_url, filename: req.file.originalname });
+  } catch (error) {
+    console.error("[uploadTemplateMedia] error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/* ── POST /api/whatsapp/test-send — send the template to one number first ── */
+export const testSendTemplate = async (req, res) => {
+  try {
+    const { templateName, language, params, mobile, name } = req.body;
+    if (!mobile) return res.status(400).json({ success: false, message: "Test mobile number is required" });
+
+    const { tpl, error } = await loadTemplateForSend({ templateName, language, params });
+    if (error) return res.status(400).json({ success: false, message: error });
+
+    const result = await sendToContact(tpl, params, { name: name || "Test", mobile });
+    if (!result.success) return res.status(502).json({ success: false, message: result.error });
+    return res.json({ success: true, message: `Test sent to ${result.formattedMobile}` });
+  } catch (error) {
+    console.error("[testSendTemplate] error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 /* ── POST /api/whatsapp/broadcast-stream (SSE) ──────────── */
 export const broadcastStream = async (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
@@ -468,14 +543,16 @@ export const broadcastStream = async (req, res) => {
   };
 
   try {
-    const { contacts, templateName } = req.body;
+    const { contacts, templateName, language, params } = req.body;
 
     if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
       sendEvent({ type: "error", message: "No contacts provided" });
       return res.end();
     }
-    if (!templateName) {
-      sendEvent({ type: "error", message: "Template name is required" });
+
+    const { tpl, error } = await loadTemplateForSend({ templateName, language, params });
+    if (error) {
+      sendEvent({ type: "error", message: error });
       return res.end();
     }
 
@@ -486,23 +563,15 @@ export const broadcastStream = async (req, res) => {
     const failed = [];
 
     for (let i = 0; i < list.length; i++) {
-      const { name, mobile } = list[i];
-
-      if (!mobile || mobile.trim() === "") {
-        failed.push({ name: name || "Unknown", mobile: mobile || "", error: "Missing mobile number" });
-        sendEvent({ type: "progress", progress: i + 1, total: list.length, status: "failed", contact: name || "Unknown" });
-        continue;
-      }
-
-      const result = await sendTemplateMessage(mobile.trim(), templateName, name || "Customer");
+      const result = await sendToContact(tpl, params, list[i]);
+      const label = list[i].name || result.mobile || "Unknown";
 
       if (result.success) {
-        sent.push({ name: name || "Customer", mobile: mobile.trim() });
-        sendEvent({ type: "progress", progress: i + 1, total: list.length, status: "sent", contact: name || mobile.trim() });
-        await saveOutboundMessage(result.formattedMobile, name || "Customer", templateName, result.waMessageId);
+        sent.push({ name: result.name, mobile: result.mobile });
+        sendEvent({ type: "progress", progress: i + 1, total: list.length, status: "sent", contact: label });
       } else {
-        failed.push({ name: name || "Customer", mobile: mobile.trim(), error: result.error });
-        sendEvent({ type: "progress", progress: i + 1, total: list.length, status: "failed", contact: name || mobile.trim(), error: result.error });
+        failed.push({ name: result.name, mobile: result.mobile, error: result.error });
+        sendEvent({ type: "progress", progress: i + 1, total: list.length, status: "failed", contact: label, error: result.error });
       }
 
       await new Promise((r) => setTimeout(r, 200));
@@ -534,30 +603,22 @@ export const broadcastStream = async (req, res) => {
 /* ── POST /api/whatsapp/broadcast (non-SSE, kept for compat) */
 export const broadcastMessage = async (req, res) => {
   try {
-    const { contacts, templateName } = req.body;
+    const { contacts, templateName, language, params } = req.body;
 
     if (!contacts || !Array.isArray(contacts) || contacts.length === 0)
       return res.json({ success: false, message: "No contacts provided" });
-    if (!templateName)
-      return res.json({ success: false, message: "Template name is required" });
+
+    const { tpl, error } = await loadTemplateForSend({ templateName, language, params });
+    if (error) return res.json({ success: false, message: error });
 
     const list = deduplicateContacts(contacts);
     const sent = [];
     const failed = [];
 
     for (const contact of list) {
-      const { name, mobile } = contact;
-      if (!mobile || mobile.trim() === "") {
-        failed.push({ name: name || "Unknown", mobile: mobile || "", error: "Missing mobile number" });
-        continue;
-      }
-      const result = await sendTemplateMessage(mobile.trim(), templateName, name || "Customer");
-      if (result.success) {
-        sent.push({ name: name || "Customer", mobile: mobile.trim() });
-        await saveOutboundMessage(result.formattedMobile, name || "Customer", templateName, result.waMessageId);
-      } else {
-        failed.push({ name: name || "Customer", mobile: mobile.trim(), error: result.error });
-      }
+      const result = await sendToContact(tpl, params, contact);
+      if (result.success) sent.push({ name: result.name, mobile: result.mobile });
+      else failed.push({ name: result.name, mobile: result.mobile, error: result.error });
       await new Promise((r) => setTimeout(r, 200));
     }
 

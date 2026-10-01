@@ -11,9 +11,13 @@ import {
   getMessages,
   sendChatMessage,
   markConversationRead,
+  getTemplates,
+  uploadTemplateMedia,
+  testSendTemplate,
 } from "../controllers/whatsappController.js";
 import authUser from "../middleware/auth.js";
 import adminAuth from "../middleware/adminAuth.js";
+import templateMediaUpload from "../middleware/multerTemplateMedia.js";
 
 const whatsappRouter = express.Router();
 
@@ -27,6 +31,11 @@ whatsappRouter.get("/history", authUser, adminAuth, getBroadcastHistory);
 whatsappRouter.get("/history/:id", authUser, adminAuth, getBroadcastHistoryDetail);
 whatsappRouter.post("/broadcast", authUser, adminAuth, broadcastMessage);
 whatsappRouter.post("/broadcast-stream", authUser, adminAuth, broadcastStream);
+
+/* ── Templates (fetched live from Meta — new approved templates appear automatically) ── */
+whatsappRouter.get("/templates", authUser, adminAuth, getTemplates);
+whatsappRouter.post("/template-media", authUser, adminAuth, templateMediaUpload.single("file"), uploadTemplateMedia);
+whatsappRouter.post("/test-send", authUser, adminAuth, testSendTemplate);
 
 /* ── Two-way chat ── */
 whatsappRouter.get("/conversations", authUser, adminAuth, getConversations);
