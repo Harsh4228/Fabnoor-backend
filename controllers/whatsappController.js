@@ -14,6 +14,7 @@ import {
   validateParams,
   buildComponents,
   renderTemplateText,
+  missingContactValue,
 } from "../config/whatsappTemplates.js";
 dotenv.config();
 
@@ -123,23 +124,31 @@ const loadTemplateForSend = async ({ templateName, language, params }) => {
     return { error: `Could not load templates from Meta: ${err.response?.data?.error?.message || err.message}` };
   }
   if (!tpl) return { error: `Template "${templateName}" (${language || "any language"}) is not approved on Meta` };
-  const problem = validateParams(analyzeTemplate(tpl), params || {});
+  const analysis = analyzeTemplate(tpl);
+  const problem = validateParams(analysis, params || {});
   if (problem) return { error: problem };
-  return { tpl };
+  return { tpl, analysis };
 };
 
 /* ── Send to one contact + record it in chat history ── */
-const sendToContact = async (tpl, params, contact) => {
+// `contact.fields` holds per-customer column values (extra Excel columns or
+// customer data from the DB) that template variables can be mapped to.
+const sendToContact = async (tpl, analysis, params, contact) => {
   const name = contact.name || "Customer";
   const mobile = (contact.mobile || "").trim();
-  if (!mobile) return { success: false, name: contact.name || "Unknown", mobile: "", error: "Missing mobile number" };
+  const fields = contact.fields && typeof contact.fields === "object" ? contact.fields : {};
+  if (!mobile) return { success: false, name: contact.name || "Unknown", mobile: "", fields, error: "Missing mobile number" };
 
-  const result = await sendTemplateMessage(mobile, tpl, params, { name, mobile });
+  const recipient = { name, mobile, fields };
+  const missing = missingContactValue(analysis, params, recipient);
+  if (missing) return { success: false, name, mobile, fields, error: missing };
+
+  const result = await sendTemplateMessage(mobile, tpl, params, recipient);
   if (result.success) {
-    const body = renderTemplateText(tpl, params, { name, mobile });
+    const body = renderTemplateText(tpl, params, recipient);
     await saveOutboundMessage(result.formattedMobile, name, body, result.waMessageId);
   }
-  return { ...result, name, mobile };
+  return { ...result, name, mobile, fields };
 };
 
 /* ── Deduplicate by mobile number ───────────────────────── */
@@ -434,14 +443,21 @@ export const markConversationRead = async (req, res) => {
 export const getCustomers = async (req, res) => {
   try {
     const users = await userModel
-      .find({ role: "user" }, "name shopName mobile")
+      .find({ role: "user" }, "name shopName mobile email address")
       .lean();
 
+    // `fields` can be mapped to template variables in the broadcast panel
     const contacts = users
       .filter((u) => u.mobile && u.mobile.trim())
       .map((u) => ({
         name: u.name || u.shopName || "Customer",
         mobile: u.mobile.trim(),
+        fields: {
+          "Shop Name": u.shopName || "",
+          Email: u.email || "",
+          City: u.address?.city || "",
+          State: u.address?.state || "",
+        },
       }));
 
     return res.json({ success: true, contacts });
@@ -518,10 +534,11 @@ export const testSendTemplate = async (req, res) => {
     const { templateName, language, params, mobile, name } = req.body;
     if (!mobile) return res.status(400).json({ success: false, message: "Test mobile number is required" });
 
-    const { tpl, error } = await loadTemplateForSend({ templateName, language, params });
+    const { tpl, analysis, error } = await loadTemplateForSend({ templateName, language, params });
     if (error) return res.status(400).json({ success: false, message: error });
 
-    const result = await sendToContact(tpl, params, { name: name || "Test", mobile });
+    // `fields` = the first contact's columns, so the test shows real per-customer values
+    const result = await sendToContact(tpl, analysis, params, { name: name || "Test", mobile, fields: req.body.fields });
     if (!result.success) return res.status(502).json({ success: false, message: result.error });
     return res.json({ success: true, message: `Test sent to ${result.formattedMobile}` });
   } catch (error) {
@@ -550,7 +567,7 @@ export const broadcastStream = async (req, res) => {
       return res.end();
     }
 
-    const { tpl, error } = await loadTemplateForSend({ templateName, language, params });
+    const { tpl, analysis, error } = await loadTemplateForSend({ templateName, language, params });
     if (error) {
       sendEvent({ type: "error", message: error });
       return res.end();
@@ -563,14 +580,14 @@ export const broadcastStream = async (req, res) => {
     const failed = [];
 
     for (let i = 0; i < list.length; i++) {
-      const result = await sendToContact(tpl, params, list[i]);
+      const result = await sendToContact(tpl, analysis, params, list[i]);
       const label = list[i].name || result.mobile || "Unknown";
 
       if (result.success) {
         sent.push({ name: result.name, mobile: result.mobile });
         sendEvent({ type: "progress", progress: i + 1, total: list.length, status: "sent", contact: label });
       } else {
-        failed.push({ name: result.name, mobile: result.mobile, error: result.error });
+        failed.push({ name: result.name, mobile: result.mobile, fields: result.fields, error: result.error });
         sendEvent({ type: "progress", progress: i + 1, total: list.length, status: "failed", contact: label, error: result.error });
       }
 
@@ -608,7 +625,7 @@ export const broadcastMessage = async (req, res) => {
     if (!contacts || !Array.isArray(contacts) || contacts.length === 0)
       return res.json({ success: false, message: "No contacts provided" });
 
-    const { tpl, error } = await loadTemplateForSend({ templateName, language, params });
+    const { tpl, analysis, error } = await loadTemplateForSend({ templateName, language, params });
     if (error) return res.json({ success: false, message: error });
 
     const list = deduplicateContacts(contacts);
@@ -616,9 +633,9 @@ export const broadcastMessage = async (req, res) => {
     const failed = [];
 
     for (const contact of list) {
-      const result = await sendToContact(tpl, params, contact);
+      const result = await sendToContact(tpl, analysis, params, contact);
       if (result.success) sent.push({ name: result.name, mobile: result.mobile });
-      else failed.push({ name: result.name, mobile: result.mobile, error: result.error });
+      else failed.push({ name: result.name, mobile: result.mobile, fields: result.fields, error: result.error });
       await new Promise((r) => setTimeout(r, 200));
     }
 

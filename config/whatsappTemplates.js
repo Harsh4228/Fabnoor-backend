@@ -169,7 +169,7 @@ export const analyzeTemplate = (tpl) => {
           label: `"${b.text}" link ending`, hint: b.url, example: b.example?.[0],
         });
       } else if (b.type === "COPY_CODE") {
-        fields.push({ key: `btn:${i}`, group: "Buttons", kind: "text", label: "Coupon code", example: b.example?.[0], required: true });
+        fields.push({ key: `btn:${i}`, group: "Buttons", kind: "text", label: "Coupon code", example: b.example?.[0], personalizable: true, required: true });
       } else if (b.type === "CATALOG") {
         fields.push({ key: `btn:${i}`, group: "Buttons", kind: "text", label: "Thumbnail product retailer ID (optional)", required: false });
       }
@@ -199,15 +199,33 @@ export const analyzeTemplate = (tpl) => {
 };
 
 /* ── Resolve one admin-entered value for a specific contact ──
- * A text value is { source: "fixed" | "name" | "mobile", value }, so one
- * broadcast can send "Hi Rahul" / "Hi Priya" etc. to each recipient.
+ * A text value is { source: "fixed" | "name" | "mobile" | "column", value,
+ * column, fallback }, so one broadcast can send "Hi Rahul, 20% off in Surat"
+ * / "Hi Priya, 10% off in Pune" etc. "column" reads contact.fields[column],
+ * i.e. an extra Excel column or a customer field from the database.
  */
 const resolveValue = (input, contact) => {
   if (input == null) return "";
   if (typeof input !== "object") return cleanParam(input);
   if (input.source === "name") return cleanParam(contact?.name || input.fallback || "Customer");
   if (input.source === "mobile") return cleanParam(contact?.mobile || "");
+  if (input.source === "column") {
+    return cleanParam(contact?.fields?.[input.column]) || cleanParam(input.fallback);
+  }
   return cleanParam(input.value);
+};
+
+/* ── Per-contact check: Meta rejects empty variables, so a contact whose
+ * column is blank (and has no fallback) is skipped with a clear reason. ── */
+export const missingContactValue = (analysis, params = {}, contact = {}) => {
+  for (const f of analysis.fields) {
+    if (f.kind !== "text" || !f.required) continue;
+    const v = params[f.key];
+    if (v?.source === "column" && !resolveValue(v, contact)) {
+      return `No value for "${v.column}" (${f.label})`;
+    }
+  }
+  return null;
 };
 
 /* ── Check every required field has a value before sending anything ── */
@@ -229,6 +247,7 @@ export const validateParams = (analysis, params = {}) => {
       const source = typeof v === "object" ? v?.source : "fixed";
       const value = typeof v === "object" ? v?.value : v;
       if (source === "fixed" && !cleanParam(value)) return `${f.label} is required`;
+      if (source === "column" && !v.column) return `${f.label}: choose a column`;
     }
   }
   return null;
