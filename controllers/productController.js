@@ -504,6 +504,8 @@ const editProduct = async (req, res) => {
       imageMap[file.fieldname].push(file);
     });
 
+    const oldVariantsSnapshot = product.variants.map((v) => ({ images: [...(v.images || [])] }));
+
     const updatedVariants = await Promise.all(
       parsedVariants.map(async (variant) => {
         let { color, fabric, sizes, existingImages, price, stock = 0, code } = variant;
@@ -518,13 +520,11 @@ const editProduct = async (req, res) => {
 
         const keepImages = Array.isArray(existingImages) ? [...existingImages] : [];
 
-        // Delete old images that were removed by the admin
-        const oldVariant = product.variants.find((v) => v.code === code);
-        for (const oldUrl of (oldVariant?.images || [])) {
-          if (!keepImages.includes(oldUrl)) {
-            await deleteFromCloudinaryByUrl(oldUrl, "image");
-          }
-        }
+        // Several colors can share one design code (e.g. "Trisha 01"), so match on
+        // code + color + fabric — matching on code alone picked the wrong variant.
+        const oldVariant = product.variants.find(
+          (v) => v.code === code && v.color === color && v.fabric === fabric
+        );
 
         let images = keepImages;
         if (newFiles.length) {
@@ -532,7 +532,7 @@ const editProduct = async (req, res) => {
           images = [...images, ...newUploadedImages];
         }
 
-        const isNewVariant = !product.variants.find((v) => v.code === code);
+        const isNewVariant = !oldVariant;
 
         return {
           color,
@@ -556,7 +556,19 @@ const editProduct = async (req, res) => {
     product.variants = updatedVariants;
     product.discount = discount !== undefined ? Number(discount) : product.discount;
 
+    // Collect old URLs before save so we can clean up only what is truly unused
+    const oldImageUrls = [...new Set((oldVariantsSnapshot || []).flatMap((v) => v.images || []))];
+
     await product.save();
+
+    // Delete images the admin removed — only after a successful save, and only
+    // if no variant in the updated product still references them
+    const stillUsed = new Set(updatedVariants.flatMap((v) => v.images || []));
+    for (const oldUrl of oldImageUrls) {
+      if (!stillUsed.has(oldUrl)) {
+        await deleteFromCloudinaryByUrl(oldUrl, "image");
+      }
+    }
 
     res.json({ success: true, product });
   } catch (error) {
